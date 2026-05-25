@@ -2,25 +2,39 @@
 
 Selamat datang di repositori pengembangan **Autonomous Vertical Take-Off and Landing (VTOL)**! Repositori ini dirancang khusus untuk memfasilitasi Anda yang baru memulai belajar pemrograman drone autonomous menggunakan **ROS2**, **Docker**, dan **WSL2** di sistem operasi Windows.
 
+Sistem ini dirancang untuk mendukung teknologi mutakhir drone autonomous modern:
+*   **Perception & Machine Learning:** Integrasi modul kamera cerdas untuk deteksi target, presisi landing, dan penghindaran rintangan berbasis AI/ML.
+*   **Autopilot (ArduPilot):** Menggunakan sistem autopilot kelas dunia untuk navigasi dan penstabil penerbangan fisik maupun SITL.
+*   **MAVROS:** Jembatan komunikasi berkinerja tinggi yang menerjemahkan protokol MAVLink ke dalam ekosistem ROS2 secara real-time.
+
 Dengan metode kontainerisasi (Docker), Anda tidak perlu khawatir merusak sistem komputer Anda atau pusing menginstal puluhan dependensi robotika yang rumit. Semuanya sudah dikemas rapi dan siap dijalankan.
 
 ---
 
 ## Daftar Isi
+
+### BAGIAN I: PENGENALAN & KONSEP
 1. [Konsep Dasar Bagi Pemula](#1-konsep-dasar-bagi-pemula)
-2. [Prasyarat & Persiapan Sistem Windows](#2-prasyarat--persiapan-sistem-windows)
-3. [Arsitektur Sistem (Bagaimana Semua Saling Terhubung)](#3-arsitektur-sistem-bagaimana-semua-saling-terhubung)
+2. [Arsitektur Sistem (Bagaimana Semua Saling Terhubung)](#2-arsitektur-sistem-bagaimana-semua-saling-terhubung)
+
+### BAGIAN II: PERSIAPAN & INSTALASI (SETUP)
+3. [Prasyarat & Persiapan Sistem Windows](#3-prasyarat--persiapan-sistem-windows)
 4. [Panduan Instalasi Langkah-demi-Langkah (Zero to Hero)](#4-panduan-instalasi-langkah-demi-langkah-zero-to-hero)
    - [Langkah 1: Setup WSL2 & WSLg](#langkah-1-setup-wsl2--wslg)
    - [Langkah 2: Instalasi Docker Engine (Native di WSL)](#langkah-2-instalasi-docker-engine-native-di-wsl)
    - [Langkah 3: Instalasi NVIDIA Container Toolkit](#langkah-3-instalasi-nvidia-container-toolkit)
-   - [Langkah 4: Membangun & Menjalankan Kontainer (dev_lite / dev_full)](#langkah-4-membangun--menjalankan-kontainer-dev_lite--dev_full)
+   - [Langkah 4: Clone Repositori & Jalankan Kontainer (dev_lite / dev_full)](#langkah-4-clone-repositori--jalankan-kontainer-dev_lite--dev_full)
    - [Langkah 5: Eksekusi dan Verifikasi](#langkah-5-eksekusi-dan-verifikasi)
+
+### BAGIAN III: ALUR KERJA HARIAN (DAILY WORKFLOW)
 5. [Alur Kerja Harian (Daily Workflow)](#5-alur-kerja-harian-daily-workflow)
-6. [Struktur Direktori & Mekanisme Berbagi File (Volume Mount)](#6-struktur-direktori--mekanisme-berbagi-file-volume-mount)
+6. [Koneksi dengan Autopilot SITL & Mission Planner](#6-koneksi-dengan-autopilot-sitl--mission-planner)
 7. [Panduan Manajemen Perintah Docker (Laptop vs Drone SBC)](#7-panduan-manajemen-perintah-docker-laptop-vs-drone-sbc)
-8. [Koneksi dengan Autopilot SITL & Mission Planner](#8-koneksi-dengan-autopilot-sitl--mission-planner)
-9. [Penyelesaian Masalah Umum (Troubleshooting FAQ)](#9-penyelesaian-masalah-umum-troubleshooting-faq)
+
+### BAGIAN IV: MANIFESTO PROYEK DRONE AUTONOMOUS (STRUKTUR & ARSITEKTUR)
+8. [Struktur Direktori & Mekanisme Berbagi File (Volume Mount)](#8-struktur-direktori--mekanisme-berbagi-file-volume-mount)
+9. [Arsitektur Software Drone: Monolitik vs Modular](#9-arsitektur-software-drone-monolitik-vs-modular)
+10. [Panduan Pembuatan & Pengembangan ROS2 Package](#10-panduan-pembuatan--pengembangan-ros2-package)
 
 ---
 
@@ -35,30 +49,12 @@ Sebelum masuk ke instalasi teknis, mari kita pahami istilah-istilah utama yang a
 *   **MAVLink & MAVROS:**
     *   *MAVLink* adalah bahasa protokol komunikasi standar yang digunakan oleh Flight Controller drone (seperti Pixhawk dengan firmware ArduPilot atau PX4).
     *   *MAVROS* adalah program penerjemah di ROS2 yang menerjemahkan bahasa MAVLink menjadi bahasa ROS2 (Topics), sehingga Anda bisa mengontrol drone lewat script ROS2.
+*   **Perception & Machine Learning:** Sistem kecerdasan drone yang bertugas mengolah input citra dari sensor kamera onboard (menggunakan pustaka seperti OpenCV, PyTorch, atau YOLO) untuk mengenali lingkungan sekitar secara dinamis, melakukan navigasi visual, atau mendarat presisi pada target.
 *   **SITL (Software In The Loop):** Simulator autopilot drone yang berjalan di komputer. Autopilot mengira ia sedang terbang di drone asli, padahal ia hanya menerima sensor buatan dan mengirim perintah motor ke lingkungan simulasi.
 
 ---
 
-## 2. Prasyarat & Persiapan Sistem Windows
-
-Untuk memastikan simulasi 3D berjalan dengan lancar, pastikan PC/Laptop Anda memenuhi spesifikasi berikut:
-
-### Spesifikasi Perangkat Keras (Minimum & Rekomendasi)
-| Komponen | Spesifikasi Minimum (Versi Lite) | Spesifikasi Rekomendasi (Versi Full + Gazebo) |
-| :--- | :--- | :--- |
-| **CPU** | Intel Core i5 / AMD Ryzen 5 (Generasi 8+) | Intel Core i7 / AMD Ryzen 7 |
-| **RAM** | 8 GB | 16 GB atau lebih |
-| **GPU** | VGA Terintegrasi (Intel HD/AMD Radeon) | NVIDIA Dedicated GPU (GTX 1050 / RTX Series+) |
-| **Storage** | 10 GB ruang kosong (SSD sangat disarankan) | 30 GB ruang kosong (SSD) |
-
-### Langkah Persiapan di Windows (Sebelum Mulai)
-1.  **Update Driver VGA NVIDIA (Khusus pengguna NVIDIA):**
-    *   Unduh dan instal driver resmi terbaru melalui aplikasi NVIDIA GeForce Experience atau website resmi NVIDIA.
-    *   **Catatan Kritis:** Cukup instal driver di Windows. Jangan pernah mengunduh/menginstal driver NVIDIA untuk Linux di dalam terminal Ubuntu WSL Anda! WSL akan otomatis menjembatani akses ke driver Windows tersebut.
-
----
-
-## 3. Arsitektur Sistem (Bagaimana Semua Saling Terhubung)
+## 2. Arsitektur Sistem (Bagaimana Semua Saling Terhubung)
 
 Diagram berikut menjelaskan bagaimana komponen perangkat lunak di Windows, WSL2, dan di dalam kontainer Docker saling berkomunikasi:
 
@@ -86,6 +82,25 @@ graph TD
     NV_WSL --> GPU
     WSLg <-->|Meneruskan Tampilan Grafis 3D| GZ
 ```
+
+---
+
+## 3. Prasyarat & Persiapan Sistem Windows
+
+Untuk memastikan simulasi 3D berjalan dengan lancar, pastikan PC/Laptop Anda memenuhi spesifikasi berikut:
+
+### Spesifikasi Perangkat Keras (Minimum & Rekomendasi)
+| Komponen | Spesifikasi Minimum (Versi Lite) | Spesifikasi Rekomendasi (Versi Full + Gazebo) |
+| :--- | :--- | :--- |
+| **CPU** | Intel Core i5 / AMD Ryzen 5 (Generasi 8+) | Intel Core i7 / AMD Ryzen 7 |
+| **RAM** | 8 GB | 16 GB atau lebih |
+| **GPU** | VGA Terintegrasi (Intel HD/AMD Radeon) | NVIDIA Dedicated GPU (GTX 1050 / RTX Series+) |
+| **Storage** | 10 GB ruang kosong (SSD sangat disarankan) | 30 GB ruang kosong (SSD) |
+
+### Langkah Persiapan di Windows (Sebelum Mulai)
+1.  **Update Driver VGA NVIDIA (Khusus pengguna NVIDIA):**
+    *   Unduh dan instal driver resmi terbaru melalui aplikasi NVIDIA GeForce Experience atau website resmi NVIDIA.
+    *   **Catatan Kritis:** Cukup instal driver di Windows. Jangan pernah mengunduh/menginstal driver NVIDIA untuk Linux di dalam terminal Ubuntu WSL Anda! WSL akan otomatis menjembatani akses ke driver Windows tersebut.
 
 ---
 
@@ -142,7 +157,7 @@ Untuk memastikan Docker sudah berjalan dengan benar, ketik:
 ```bash
 docker ps
 ```
-If tidak muncul pesan error dan terminal menampilkan daftar tabel kosong, berarti Docker Anda telah aktif!
+Jika tidak muncul pesan error dan terminal menampilkan daftar tabel kosong, berarti Docker Anda telah aktif!
 
 ---
 
@@ -175,26 +190,33 @@ sudo service docker restart
 
 ---
 
-### Langkah 4: Membangun & Menjalankan Kontainer (dev_lite / dev_full)
-Kembali ke terminal **Ubuntu (WSL)**. Masuk ke folder project tempat file `Dockerfile` dan `docker-compose.yml` berada (misal `~/vtol_dev`).
-
-Anda dapat memilih membangun salah satu jenis kontainer yang sesuai dengan PC Anda:
-*   **Jika PC Anda High-End (Gunakan dev_full untuk simulator Gazebo 3D + GPU Passthrough):**
+### Langkah 4: Clone Repositori & Jalankan Kontainer (dev_lite / dev_full)
+1.  **Clone Repositori:**
+    Buka terminal **Ubuntu (WSL)** Anda, lalu unduh kode repositori pengembangan ini ke lokal Anda:
     ```bash
+    git clone https://github.com/qois51/dev-ros2-docker-wsl.git ~/vtol_dev
     cd ~/vtol_dev
-    docker compose build dev_full
     ```
-*   **Jika PC Anda berspesifikasi rendah/Laptop Kentang (Gunakan dev_lite untuk visualisasi RViz saja):**
-    ```bash
-    cd ~/vtol_dev
-    docker compose build dev_lite
-    ```
-
-Setelah proses build selesai, jalankan kontainer di latar belakang dengan perintah:
-```bash
-docker compose up -d
-```
-*Catatan: Proses build pertama kali ini mungkin memakan waktu 5-15 menit tergantung kecepatan internet Anda, karena Docker perlu mengunduh aset ROS2 Jazzy yang cukup besar.*
+2.  **Pilih dan Bangun Target Kontainer:**
+    Anda dapat memilih membangun kontainer yang sesuai dengan PC Anda:
+    *   **Jika PC Anda High-End (Gunakan dev_full untuk simulator Gazebo 3D + GPU Passthrough):**
+        ```bash
+        docker compose build dev_full
+        ```
+    *   **Jika PC Anda berspesifikasi rendah/Laptop Kentang (Gunakan dev_lite untuk visualisasi RViz saja):**
+        ```bash
+        docker compose build dev_lite
+        ```
+3.  **Jalankan Kontainer Pilihan Anda:**
+    *   Jika Anda menggunakan versi **FULL**:
+        ```bash
+        docker compose up -d dev_full
+        ```
+    *   Jika Anda menggunakan versi **LITE**:
+        ```bash
+        docker compose up -d dev_lite
+        ```
+    *(Catatan: Pastikan untuk menyertakan nama container (`dev_full` atau `dev_lite`) di akhir perintah `docker compose up -d` agar Docker hanya menyalakan kontainer yang sesuai, bukan membangun/menjalankan segalanya sekaligus).*
 
 ---
 
@@ -213,9 +235,9 @@ Untuk memverifikasi bahwa kontainer berhasil terpasang dan siap digunakan:
 2.  **Cek Konektivitas GUI & GPU (Khusus versi FULL):**
     Di dalam kontainer `vtol_full`, jalankan perintah:
     ```bash
-    gazebo
+    gz --version
     ```
-    *Jika jendela Gazebo terbuka secara mulus di desktop Windows Anda, instalasi GUI & GPU passthrough berhasil! Tekan `Ctrl+C` di terminal untuk menutup Gazebo kembali.*
+    *Jika muncul version dari gazebo, installasi berhasil.*
 3.  **Cek Deteksi IP Windows Host:**
     Di dalam kontainer, jalankan:
     ```bash
@@ -235,14 +257,21 @@ Bagaimana cara menggunakan lingkungan pengembangan ini setiap harinya? Ini adala
     ```bash
     sudo service docker start
     ```
-3.  **Masuk ke Folder Project:**
+3.  **Masuk ke Folder Project & Tarik Update Terbaru:**
+    Lakukan `git pull` setiap hari agar Anda selalu mendapatkan pembaruan file dan dockerfile terbaru dari repositori utama:
     ```bash
     cd ~/vtol_dev
+    git pull origin main
     ```
-4.  **Nyalakan Kontainer:**
-    ```bash
-    docker compose up -d
-    ```
+4.  **Nyalakan Kontainer Pilihan Anda:**
+    *   Untuk versi **FULL**:
+        ```bash
+        docker compose up -d dev_full
+        ```
+    *   Untuk versi **LITE**:
+        ```bash
+        docker compose up -d dev_lite
+        ```
 5.  **Masuk ke Dalam Lingkungan Kontainer Linux ROS2:**
     *   Untuk kontainer **FULL**: `docker exec -it vtol_full bash`
     *   Untuk kontainer **LITE**: `docker exec -it vtol_lite bash`
@@ -254,72 +283,7 @@ Bagaimana cara menggunakan lingkungan pengembangan ini setiap harinya? Ini adala
 
 ---
 
-## 6. Struktur Direktori & Mekanisme Berbagi File (Volume Mount)
-
-Bagi pemula, konsep penyimpanan Docker terkadang membingungkan. Jika Anda menghapus kontainer, apakah file kode Anda akan hilang? **Jawabannya: Tidak!**
-
-Kami menggunakan fitur bernama **Volume Mount** (atau bind mount) yang menjembatani folder di komputer asli Anda dengan folder di dalam kontainer.
-
-### Pemetaan Folder
-*   Folder fisik di komputer Anda: `~/vtol_dev/workspace`
-*   Terhubung langsung ke folder di dalam kontainer: `/home/pilot/workspace`
-
-```
-  KOMPUTER ANDA (WSL)                 KONTAINER DOCKER
- ┌──────────────────────┐            ┌──────────────────────┐
- │ ~/vtol_dev/          │            │ /home/pilot/         │
- │  ├── Dockerfile      │            │                      │
- │  ├── docker-compose  │            │                      │
- │  └── workspace/  ◄───┼──(Jembatan)┼───► workspace/       │
- │       └── main.py    │            │       └── main.py    │
- └──────────────────────┘            └──────────────────────┘
-```
-
-### Keuntungan Utama:
-Anda bisa membuka VS Code di Windows, mengedit file python di dalam folder `~/vtol_dev/workspace`, dan seketika itu juga file tersebut akan terupdate di dalam kontainer Docker Anda untuk dijalankan menggunakan ROS2! Anda tidak perlu mengetik kode menggunakan editor terminal yang menyulitkan seperti `nano` atau `vi`.
-
----
-
-## 7. Panduan Manajemen Perintah Docker (Laptop vs Drone SBC)
-
-Ketika Anda melakukan pengodean di laptop, Anda tentu ingin melihat visualisasi 3D yang megah di Gazebo. Namun, saat kode tersebut dimasukkan ke dalam komputer penerbangan drone asli (misal Raspberry Pi atau NVIDIA Jetson), kita harus membuang simulator Gazebo agar performa drone tetap stabil dan ringan.
-
-Di sinilah keunggulan sistem **Multi-stage Build** yang kita miliki.
-
-### Skenario A: Pengembangan di Laptop/PC (Docker Compose)
-Gunakan perintah Docker Compose untuk memilih lingkungan simulasi:
-
-*   **Untuk Build versi FULL (Simulasi Lengkap + Gazebo + GPU Passthrough):**
-    ```bash
-    docker compose build dev_full
-    ```
-*   **Untuk Build versi LITE (Laptop Tanpa GPU / Hanya Ingin Visualisasi Data Ringan):**
-    ```bash
-    docker compose build dev_lite
-    ```
-*   **Untuk Menjalankan:**
-    ```bash
-    docker compose up -d
-    ```
-
----
-
-### Skenario B: Deployment ke Komputer Drone Fisik (SBC ARM64)
-SBC (Single Board Computer) seperti Raspberry Pi menggunakan arsitektur prosesor **ARM64**, berbeda dengan laptop yang menggunakan **x86_64**. Oleh karena itu, **Anda wajib melakukan build image langsung di dalam SBC tersebut.**
-
-1.  Salin file `Dockerfile` ke dalam penyimpanan Raspberry Pi / Jetson Anda.
-2.  Buka terminal di SBC Anda, lalu jalankan perintah pemotongan target ini:
-    ```bash
-    docker build --target sbc -t vtol_drone_sbc:latest .
-    ```
-
-> [!TIP]
-> **Mengapa perintah ini penting bagi pemula?**
-> Bendera `--target sbc` menginstruksikan Docker untuk **berhenti** menginstal program tepat setelah *Stage 1 (SBC)* selesai. Semua perintah instalasi simulator Gazebo 3D yang sangat berat di baris-baris bawah `Dockerfile` akan diabaikan sepenuhnya. Hasilnya, Anda mendapatkan sistem container terbang yang sangat kecil dan ringan (kurang dari 1 GB), menghemat RAM serta ruang kartu SD drone Anda!
-
----
-
-## 8. Koneksi dengan Autopilot SITL & Mission Planner
+## 6. Koneksi dengan Autopilot SITL & Mission Planner
 
 Untuk menguji simulasi terbang drone VTOL Anda secara autonomous, kita dapat menyambungkan ROS2 di dalam Docker langsung dengan simulator internal di **Mission Planner**.
 
@@ -367,37 +331,194 @@ Langkah-langkah koneksi:
 
 ---
 
-## 9. Penyelesaian Masalah Umum (Troubleshooting FAQ)
+## 7. Panduan Manajemen Perintah Docker (Laptop vs Drone SBC)
 
-Berikut adalah daftar solusi jika Anda mengalami kendala saat mengikuti panduan ini:
+Ketika Anda melakukan pengodean di laptop, Anda tentu ingin melihat visualisasi 3D yang megah di Gazebo. Namun, saat kode tersebut dimasukkan ke dalam komputer penerbangan drone asli (misal Raspberry Pi atau NVIDIA Jetson), kita harus membuang simulator Gazebo agar performa drone tetap stabil dan ringan.
 
-### Q1: Error `NVIDIA driver not found` atau kegagalan saat menjalankan `docker compose build dev_full`
-*   **Penyebab:** NVIDIA Container Toolkit belum terinstal dengan benar atau driver VGA di Windows belum terupdate.
-*   **Solusi:**
-    1.  Ulangi langkah-langkah di **Langkah 3** secara teliti.
-    2.  Pastikan layanan docker di-restart: `sudo service docker restart`.
-    3.  Gunakan target `dev_lite` jika laptop Anda tidak memiliki kartu grafis NVIDIA diskrit.
+Di sinilah keunggulan sistem **Multi-stage Build** yang kita miliki.
 
-### Q2: Perintah `docker` atau `docker-compose` memunculkan pesan error `Cannot connect to the Docker daemon`
-*   **Penyebab:** Layanan Docker di dalam WSL2 belum menyala secara otomatis.
-*   **Solusi:**
-    Jalankan perintah berikut di terminal Ubuntu WSL Anda sebelum memulainya:
+### Skenario A: Pengembangan di Laptop/PC (Docker Compose)
+Gunakan perintah Docker Compose untuk memilih lingkungan simulasi:
+
+*   **Untuk Build versi FULL (Simulasi Lengkap + Gazebo + GPU Passthrough):**
     ```bash
-    sudo service docker start
+    docker compose build dev_full
+    ```
+*   **Untuk Build versi LITE (Laptop Tanpa GPU / Hanya Ingin Visualisasi Data Ringan):**
+    ```bash
+    docker compose build dev_lite
+    ```
+*   **Untuk Menjalankan (Sesuai Pilihan):**
+    *   Untuk versi **FULL**:
+        ```bash
+        docker compose up -d dev_full
+        ```
+    *   Untuk versi **LITE**:
+        ```bash
+        docker compose up -d dev_lite
+        ```
+
+---
+
+### Skenario B: Deployment ke Komputer Drone Fisik (SBC ARM64)
+SBC (Single Board Computer) seperti Raspberry Pi menggunakan arsitektur prosesor **ARM64**, berbeda dengan laptop yang menggunakan **x86_64**. Oleh karena itu, **Anda wajib melakukan build image langsung di dalam SBC tersebut.**
+
+1.  Salin file `Dockerfile` ke dalam penyimpanan Raspberry Pi / Jetson Anda.
+2.  Buka terminal di SBC Anda, lalu jalankan perintah pemotongan target ini:
+    ```bash
+    docker build --target sbc -t vtol_drone_sbc:latest .
     ```
 
-### Q3: Saat menjalankan perintah `gazebo` atau aplikasi GUI lainnya di dalam kontainer, aplikasi tidak muncul di Windows
-*   **Penyebab:** WSLg (sistem grafis WSL) gagal menjembatani display ke Windows host, atau Windows Anda menggunakan versi WSL lama.
-*   **Solusi:**
-    1.  Keluar dari WSL, buka PowerShell Windows, lalu ketik `wsl --shutdown` untuk merestart subsistem WSL sepenuhnya.
-    2.  Buka kembali Ubuntu WSL Anda dan ketik `xclock`. Jika muncul jendela jam analog kecil, berarti sistem GUI Anda sudah normal.
-    3.  Pastikan variabel `$DISPLAY` di dalam kontainer terisi dengan benar (sudah dikonfigurasi otomatis di `docker-compose.yml` Anda).
+> [!TIP]
+> **Mengapa perintah ini penting bagi pemula?**
+> Bendera `--target sbc` menginstruksikan Docker untuk **berhenti** menginstal program tepat setelah *Stage 1 (SBC)* selesai. Semua perintah instalasi simulator Gazebo 3D yang sangat berat di baris-baris bawah `Dockerfile` akan diabaikan sepenuhnya. Hasilnya, Anda mendapatkan sistem container terbang yang sangat kecil dan ringan (kurang dari 1 GB), menghemat RAM serta ruang kartu SD drone Anda!
 
-### Q4: MAVROS memunculkan status `FCU Connection Lost` atau gagal menyambung ke IP Windows
-*   **Penyebab:** Windows Firewall memblokir akses atau simulator SITL belum berjalan sempurna di port TCP `5762`.
-*   **Solusi:**
-    1.  Pastikan Anda telah mengaktifkan aturan masuk pada Windows Firewall. Coba nonaktifkan sementara Windows Defender Firewall untuk memastikannya.
-    2.  Di terminal kontainer, coba cek apakah IP Windows `$WIN_IP` terdeteksi secara valid dengan mengetik `echo $WIN_IP`.
-    3.  Ganti port parameter `fcu_url` menjadi `5760` (contoh: `tcp://$WIN_IP:5760`) jika port simulasi default Mission Planner Anda dialokasikan ke port `5760`.
+---
+
+## 8. Struktur Direktori & Mekanisme Berbagi File (Volume Mount)
+
+Bagi pemula, konsep penyimpanan Docker terkadang membingungkan. Jika Anda menghapus kontainer, apakah file kode Anda akan hilang? **Jawabannya: Tidak!**
+
+Kami menggunakan fitur bernama **Volume Mount** (atau bind mount) yang menjembatani folder di komputer asli Anda dengan folder di dalam kontainer.
+
+### Pemetaan Folder
+*   Folder fisik di komputer Anda: `~/vtol_dev/workspace`
+*   Terhubung langsung ke folder di dalam kontainer: `/home/pilot/workspace`
+
+```
+  KOMPUTER ANDA (WSL)                 KONTAINER DOCKER
+ ┌──────────────────────┐            ┌──────────────────────┐
+ │ ~/vtol_dev/          │            │ /home/pilot/         │
+ │  ├── Dockerfile      │            │                      │
+ │  ├── docker-compose  │            │                      │
+ │  └── workspace/  ◄───┼──(Jembatan)┼───► workspace/       │
+ │       └── main.py    │            │       └── main.py    │
+ └──────────────────────┘            └──────────────────────┘
+```
+
+### Keuntungan Utama:
+Anda bisa membuka VS Code di Windows, mengedit file python di dalam folder `~/vtol_dev/workspace`, dan seketika itu juga file tersebut akan terupdate di dalam kontainer Docker Anda untuk dijalankan menggunakan ROS2! Anda tidak perlu mengetik kode menggunakan editor terminal yang menyulitkan seperti `nano` or `vi`.
+
+---
+
+## 9. Arsitektur Software Drone: Monolitik vs Modular
+
+Saat merancang arsitektur sistem kendali drone autonomous secara *full stack* (dilengkapi kamera navigasi AI + kontrol penerbangan MAVROS), **sangat tidak disarankan menyatukan seluruh kode dalam satu package tunggal (Monolitik)**. Pendekatan terbaik adalah memecahnya menjadi beberapa package modular yang saling berkomunikasi melalui topik ROS2.
+
+### Mengapa Harus Modular?
+1. **Pemisahan Peran (Separation of Concerns):** Menjaga agar kode navigasi terbang (`vtol_control`), pengolahan kamera AI (`vtol_perception`), dan visualisasi/simulasi (`vtol_simulation`) terpisah satu sama lain.
+2. **Efisiensi Deployment SBC (Raspberry Pi):** Saat dipasang pada komputer drone fisik, Anda hanya perlu mentransfer package navigasi dan sensor. File berat simulator 3D bisa diabaikan untuk menghemat RAM dan memori.
+3. **Ketahanan Sistem (Failsafe):** Jika modul visi komputer berbasis Deep Learning mengalami error/crash, sistem kontrol penerbangan utama tetap berjalan mandiri dan dapat mengeksekusi prosedur pendaratan darurat (*Return-to-Launch*).
+
+### Rekomendasi Struktur Workspace Modular (Kasus: ArUco Precision Landing)
+
+Berikut adalah struktur direktori workspace ideal (`~/vtol_dev/workspace/src/`) untuk sistem drone autonomous yang menggunakan **ArUco Marker** untuk presisi pendaratan:
+
+```text
+workspace/
+└── src/
+    ├── vtol_msgs/                  <-- [Package Custom Message]
+    │   └── msg/
+    │       └── ArucoMarkerPose.msg # Mendefinisikan koordinat X, Y, Z marker & ID ArUco
+    │
+    ├── vtol_perception/            <-- [Package Visi Komputer / ML]
+    │   ├── vtol_perception/
+    │   │   ├── __init__.py
+    │   │   └── aruco_detector.py   # Node Python (OpenCV) untuk mendeteksi ArUco dari kamera,
+    │   │                           # menghitung 3D pose, lalu mem-publish topik '/vtol/aruco_pose'
+    │   └── package.xml             # Dependensi: rclpy, cv_bridge, v4l2_camera, vtol_msgs
+    │
+    ├── vtol_control/               <-- [Package Otak Kendali & Navigasi]
+    │   ├── vtol_control/
+    │   │   ├── __init__.py
+    │   │   └── precision_landing.py # Node untuk membaca '/vtol/aruco_pose', menghitung aksi
+    │   │                            # koreksi terbang, lalu mengirimkan setpoint ke MAVROS
+    │   └── package.xml              # Dependensi: rclpy, mavros_msgs, vtol_msgs
+    │
+    └── vtol_bringup/               <-- [Package Saklar / Launch Configuration]
+        └── launch/
+            └── autonomous_landing.launch.py # Menyalakan driver kamera, MAVROS, detector,
+                                             # dan kontroler sekaligus secara otomatis
+```
+
+### Alur Aliran Data (Data Flow):
+1. **`v4l2_camera`** atau Gazebo kamera mengirimkan gambar mentah (`sensor_msgs/msg/Image`) ke topik `/camera/image_raw`.
+2. **`vtol_perception` (Node `aruco_detector`)** mengambil gambar tersebut, memprosesnya dengan OpenCV ArUco, menghitung translasi 3D target, lalu menyiarkan hasilnya (`vtol_msgs/msg/ArucoMarkerPose`) ke topik `/vtol/aruco_pose`.
+3. **`vtol_control` (Node `precision_landing`)** mendengarkan topik tersebut, menjalankan kontroler penyesuaian posisi (misal PID), lalu mem-publish koordinat pendaratan presisi ke **MAVROS** via topik `/mavros/setpoint_position/local` atau mengirim perintah pendaratan MAVLink.
+
+---
+
+## 10. Panduan Pembuatan & Pengembangan ROS2 Package
+
+Bila Anda ingin memaketkan kode Python Anda menjadi modul yang rapi dan terstandarisasi di ROS2 (misal untuk monitoring sensor, auto-takeoff, dll.), ikuti langkah-langkah di bawah ini.
+
+### Langkah 1: Masuk ke Kontainer & Buat Package
+1. Masuk ke kontainer yang berjalan (disarankan versi `FULL` atau `LITE`):
+   ```bash
+   docker exec -it vtol_full bash
+   ```
+2. Pindah ke direktori workspace utama dan buat package berbasis Python dengan dependensi `rclpy` dan `mavros_msgs`:
+   ```bash
+   cd ~/workspace
+   ros2 pkg create --build-type ament_python vtol_monitoring --dependencies rclpy mavros_msgs
+   ```
+
+### Langkah 2: Buat Node Baru
+Buat file python baru, misalnya `state_listener_node.py` di dalam folder `vtol_monitoring/vtol_monitoring/`:
+```python
+import rclpy
+from rclpy.node import Node
+from mavros_msgs.msg import State
+
+class MavrosStateListener(Node):
+    def __init__(self):
+        super().__init__('mavros_state_listener')
+        self.subscription = self.create_subscription(
+            State,
+            '/mavros/state',
+            self.state_callback,
+            10
+        )
+        self.get_logger().info('Node monitor /mavros/state telah aktif!')
+
+    def state_callback(self, msg):
+        self.get_logger().info(f'Connected: {msg.connected} | Armed: {msg.armed} | Mode: {msg.mode}')
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = MavrosStateListener()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+if __name__ == '__main__':
+    main()
+```
+
+### Langkah 3: Konfigurasi setup.py
+Buka file `setup.py` di folder root package (`vtol_monitoring/setup.py`), lalu daftarkan node Anda di dalam `entry_points` agar dapat dipanggil menggunakan perintah `ros2 run`:
+```python
+    entry_points={
+        'console_scripts': [
+            'state_listener = vtol_monitoring.state_listener_node:main',
+        ],
+    },
+```
+
+### Langkah 4: Kompilasi Workspace & Jalankan
+Kembali ke root workspace (`~/workspace`) lalu jalankan `colcon build`:
+```bash
+cd ~/workspace
+colcon build --packages-select vtol_monitoring
+```
+Setelah kompilasi selesai, jalankan source dan node Anda:
+```bash
+source install/setup.bash
+ros2 run vtol_monitoring state_listener
+```
 
 ---
