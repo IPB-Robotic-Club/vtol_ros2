@@ -4,12 +4,24 @@ services:
   dev:
     build:
       context: .
+      target: dev
     container_name: vtol_dev
     network_mode: host
     environment:
       - DISPLAY=${DISPLAY}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ./workspace:/home/pilot/workspace
+    stdin_open: true
+    tty: true
+
+  sbc:
+    build:
+      context: .
+      target: sbc
+    container_name: vtol_sbc
+    network_mode: host
+    volumes:
       - ./workspace:/home/pilot/workspace
     stdin_open: true
     tty: true
