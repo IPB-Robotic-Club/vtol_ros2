@@ -22,13 +22,14 @@ Dengan metode kontainerisasi (Docker), Anda tidak perlu khawatir merusak sistem 
 4. [Panduan Instalasi Langkah-demi-Langkah (Zero to Hero)](#4-panduan-instalasi-langkah-demi-langkah-zero-to-hero)
    - [Langkah 1: Setup WSL2 & WSLg](#langkah-1-setup-wsl2--wslg)
    - [Langkah 2: Instalasi Docker Engine (Native di WSL)](#langkah-2-instalasi-docker-engine-native-di-wsl)
-   - [Langkah 3: Clone Repositori & Jalankan Kontainer](#langkah-3-clone-repositori--jalankan-kontainer)
+   - [Langkah 3: Clone Repositori & Jalankan Kontainer (dev / sbc)](#langkah-3-clone-repositori--jalankan-kontainer-dev--sbc)
    - [Langkah 4: Eksekusi dan Verifikasi](#langkah-4-eksekusi-dan-verifikasi)
 
 ### BAGIAN III: ALUR KERJA HARIAN (DAILY WORKFLOW)
 5. [Alur Kerja Harian (Daily Workflow)](#5-alur-kerja-harian-daily-workflow)
 6. [Koneksi dengan Autopilot SITL & Mission Planner](#6-koneksi-dengan-autopilot-sitl--mission-planner)
 7. [Panduan Manajemen Perintah Docker](#7-panduan-manajemen-perintah-docker)
+8. [Panduan Khusus Deployment ke SBC (Raspberry Pi)](docs/sbc_deployment.md)
 
 ### BAGIAN IV: MANIFESTO PROYEK DRONE AUTONOMOUS (STRUKTUR & ARSITEKTUR)
 8. [Struktur Direktori & Mekanisme Berbagi File (Volume Mount)](#8-struktur-direktori--mekanisme-berbagi-file-volume-mount)
@@ -55,7 +56,7 @@ Sebelum masuk ke instalasi teknis, mari kita pahami istilah-istilah utama yang a
 
 ## 2. Arsitektur Sistem (Bagaimana Semua Saling Terhubung)
 
-Diagram berikut menjelaskan bagaimana komponen perangkat lunak di Windows, WSL2, dan di dalam kontainer Docker saling berkomunikasi:
+Diagram berikut menjelaskan bagaimana komponen perangkat lunak di Windows, WSL2, dan di dalam kontainer Docker (PC vs Raspberry Pi) saling berkomunikasi:
 
 ```mermaid
 graph TD
@@ -63,19 +64,21 @@ graph TD
         MP["Mission Planner / SITL Autopilot"]
     end
 
-    subgraph WSL ["WSL2 Environment (Ubuntu 24.04)"]
-        Docker["Docker Engine Native"]
-        WSLg["WSLg - Server Antarmuka Grafis"]
+    subgraph HW ["Host Environment (PC vs Raspberry Pi)"]
+        Docker["Docker Engine"]
     end
 
-    subgraph DC ["Docker Container"]
-        subgraph DF ["vtol_dev (ROS2 & MAVROS)"]
-            ROS2["ROS 2 Jazzy (Desktop)"] <--> MAVROS["Node MAVROS"]
+    subgraph DC ["Docker Containers"]
+        subgraph DF ["vtol_dev (PC - Target: dev)"]
+            ROS2_Dev["ROS 2 Desktop (GUI/RViz)"] <--> MAVROS_Dev["Node MAVROS"]
+        end
+        subgraph DS ["vtol_sbc (SBC - Target: sbc)"]
+            ROS2_Sbc["ROS 2 Base (Lightweight)"] <--> MAVROS_Sbc["Node MAVROS"]
         end
     end
 
-    MP <-->|Komunikasi Jaringan TCP: WIN_IP| MAVROS
-    WSLg <-->|Meneruskan Tampilan Grafis (RViz, etc.)| ROS2
+    MP <-->|Komunikasi Jaringan TCP| MAVROS_Dev
+    MP <-->|Koneksi Serial/IP Fisik| MAVROS_Sbc
 ```
 
 ---
@@ -155,49 +158,33 @@ Jika tidak muncul pesan error dan terminal menampilkan daftar tabel kosong, bera
 
 ---
 
-### Langkah 3: Instalasi NVIDIA Container Toolkit
-*(Langkah ini khusus untuk laptop yang memiliki kartu grafis diskrit **NVIDIA**. Jika laptop Anda hanya menggunakan Intel HD atau AMD Radeon terintegrasi, Anda bisa melewati langkah ini).*
-
-Langkah ini diperlukan agar kontainer Docker Anda dapat mendeteksi dan menggunakan kekuatan GPU NVIDIA Anda untuk rendering 3D di Gazebo.
-
-Di dalam terminal **Ubuntu (WSL)**, jalankan:
-
-```bash
-# 1. Unduh dan daftarkan kunci keamanan repositori NVIDIA
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-
-# 2. Daftarkan repositori toolkit NVIDIA ke sistem Ubuntu
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-
-# 3. Instal NVIDIA Container Toolkit
-sudo apt-get update
-sudo apt-get install -y nvidia-container-toolkit
-
-# 4. Konfigurasi runtime Docker agar mengenali kartu grafis NVIDIA
-sudo nvidia-ctk runtime configure --runtime=docker
-
-# 5. Mulai ulang layanan Docker di WSL Anda
-sudo service docker restart
-```
-
----
-
-### Langkah 4: Membangun & Menjalankan Kontainer
-*   **Clone Git Repository:**
+### Langkah 3: Clone Repositori & Jalankan Kontainer (dev / sbc)
+1.  **Clone Repositori:**
+    Buka terminal **Ubuntu (WSL)** Anda, lalu unduh kode repositori pengembangan ini ke lokal Anda:
     ```bash
     git clone https://github.com/IPB-Robotic-Club/vtol_ros2.git ~/vtol_dev
     cd ~/vtol_dev
     ```
-2.  **Bangun Image Kontainer:**
-    ```bash
-    docker compose build
-    ```
-3.  **Jalankan Kontainer:**
-    ```bash
-    docker compose up -d
-    ```
+2.  **Membangun Image Kontainer (Sesuai Kebutuhan):**
+    *   **Untuk Pengembangan di PC/Laptop (Rekomendasi Utama):**
+        Secara umum untuk mem-build target development gunakan:
+        ```bash
+        docker compose build dev
+        ```
+    *   **Untuk Deployment di Raspberry Pi (Target: sbc):**
+        ```bash
+        docker compose build sbc
+        ```
+3.  **Menjalankan Kontainer:**
+    *   **Untuk PC/Laptop:**
+        Secara umum untuk menjalankan kontainer development gunakan:
+        ```bash
+        docker compose up -d dev
+        ```
+    *   **Untuk Raspberry Pi (SBC):**
+        ```bash
+        docker compose up -d sbc
+        ```
 
 ---
 
@@ -205,10 +192,15 @@ sudo service docker restart
 Untuk memverifikasi bahwa kontainer berhasil terpasang dan siap digunakan:
 
 1.  **Masuk ke dalam kontainer yang menyala:**
-    ```bash
-    docker exec -it vtol_dev bash
-    ```
-2.  **Cek Deteksi IP Windows Host:**
+    *   **Kontainer PC/Laptop:**
+        ```bash
+        docker exec -it vtol_dev bash
+        ```
+    *   **Kontainer Raspberry Pi (SBC):**
+        ```bash
+        docker exec -it vtol_sbc bash
+        ```
+2.  **Cek Deteksi IP Windows Host (Khusus PC/Laptop):**
     Di dalam kontainer, jalankan:
     ```bash
     echo $WIN_IP
@@ -234,13 +226,11 @@ Bagaimana cara menggunakan lingkungan pengembangan ini setiap harinya? Ini adala
     git pull origin main
     ```
 4.  **Nyalakan Kontainer:**
-    ```bash
-    docker compose up -d
-    ```
+    *   *Untuk PC/Laptop:* `docker compose up -d dev`
+    *   *Untuk Raspberry Pi:* `docker compose up -d sbc`
 5.  **Masuk ke Dalam Lingkungan Kontainer Linux ROS2:**
-    ```bash
-    docker exec -it vtol_dev bash
-    ```
+    *   *Untuk PC/Laptop:* `docker exec -it vtol_dev bash`
+    *   *Untuk Raspberry Pi:* `docker exec -it vtol_sbc bash`
 6.  **Setelah Selesai Bekerja:**
     Keluar dari kontainer dengan mengetik `exit`, lalu matikan kontainer Docker Anda agar tidak memakan memori RAM laptop Anda di latar belakang:
     ```bash
@@ -302,23 +292,23 @@ Langkah-langkah koneksi:
 Berikut adalah perintah-perintah dasar Docker Compose untuk mengelola kontainer VTOL Anda:
 
 *   **Membangun Ulang Image:**
-    ```bash
-    docker compose build
-    ```
+    *   *Untuk PC/Laptop:* `docker compose build dev`
+    *   *Untuk Raspberry Pi:* `docker compose build sbc`
 *   **Menjalankan Kontainer:**
-    ```bash
-    docker compose up -d
-    ```
+    *   *Untuk PC/Laptop:* `docker compose up -d dev`
+    *   *Untuk Raspberry Pi:* `docker compose up -d sbc`
 *   **Masuk ke Kontainer:**
-    ```bash
-    docker exec -it vtol_dev bash
-    ```
+    *   *Untuk PC/Laptop:* `docker exec -it vtol_dev bash`
+    *   *Untuk Raspberry Pi:* `docker exec -it vtol_sbc bash`
 *   **Menghentikan Kontainer:**
     ```bash
     docker compose down
     ```
 
-Untuk deployment ke komputer drone fisik (SBC ARM64) seperti Raspberry Pi atau NVIDIA Jetson, Anda dapat menyalin file `Dockerfile` dan menjalankan build secara native pada SBC tersebut menggunakan perintah build yang sama.
+Untuk deployment ke komputer drone fisik (SBC ARM64) seperti Raspberry Pi atau NVIDIA Jetson, Anda dapat menggunakan Docker Buildx untuk mem-build image ARM64 di PC, mengekspornya ke format tar, mentransfer via SCP, dan me-load di Raspberry Pi. 
+
+Panduan lengkap langkah demi langkah dapat diakses di:
+👉 **[Panduan Khusus Deployment ke SBC (Raspberry Pi)](docs/sbc_deployment.md)**
 
 ---
 
