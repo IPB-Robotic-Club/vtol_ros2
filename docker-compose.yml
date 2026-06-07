@@ -1,49 +1,15 @@
 version: '3.8'
 
 services:
-  # 1. Target Full (Pakai GPU & GUI)
-  dev_full:
+  dev:
     build:
       context: .
-      target: full
-    container_name: vtol_full
+    container_name: vtol_dev
     network_mode: host
     environment:
       - DISPLAY=${DISPLAY}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ./workspace:/home/pilot/workspace
-    stdin_open: true
-    tty: true
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
-
-  # 2. Target Lite (Tanpa GPU, Tanpa Gazebo, tapi ada GUI dasar spt RViz)
-  dev_lite:
-    build:
-      context: .
-      target: lite
-    container_name: vtol_lite
-    network_mode: host
-    environment:
-      - DISPLAY=${DISPLAY}
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw
-      - ./workspace:/home/pilot/workspace
-    stdin_open: true
-    tty: true
-
-  # 3. Target SBC (Untuk tes simulasi deployment)
-  dev_sbc:
-    build:
-      context: .
-      target: sbc
-    container_name: vtol_sbc
-    network_mode: host
     stdin_open: true
     tty: true
