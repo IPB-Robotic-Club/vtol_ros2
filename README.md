@@ -17,19 +17,18 @@ Dengan metode kontainerisasi (Docker), Anda tidak perlu khawatir merusak sistem 
 1. [Konsep Dasar Bagi Pemula](#1-konsep-dasar-bagi-pemula)
 2. [Arsitektur Sistem (Bagaimana Semua Saling Terhubung)](#2-arsitektur-sistem-bagaimana-semua-saling-terhubung)
 
-### BAGIAN II: PERSIAPAN & INSTALASI (SETUP)
+#### BAGIAN II: PERSIAPAN & INSTALASI (SETUP)
 3. [Prasyarat & Persiapan Sistem Windows](#3-prasyarat--persiapan-sistem-windows)
 4. [Panduan Instalasi Langkah-demi-Langkah (Zero to Hero)](#4-panduan-instalasi-langkah-demi-langkah-zero-to-hero)
    - [Langkah 1: Setup WSL2 & WSLg](#langkah-1-setup-wsl2--wslg)
    - [Langkah 2: Instalasi Docker Engine (Native di WSL)](#langkah-2-instalasi-docker-engine-native-di-wsl)
-   - [Langkah 3: Instalasi NVIDIA Container Toolkit](#langkah-3-instalasi-nvidia-container-toolkit)
-   - [Langkah 4: Clone Repositori & Jalankan Kontainer (dev_lite / dev_full)](#langkah-4-clone-repositori--jalankan-kontainer-dev_lite--dev_full)
-   - [Langkah 5: Eksekusi dan Verifikasi](#langkah-5-eksekusi-dan-verifikasi)
+   - [Langkah 3: Clone Repositori & Jalankan Kontainer](#langkah-3-clone-repositori--jalankan-kontainer)
+   - [Langkah 4: Eksekusi dan Verifikasi](#langkah-4-eksekusi-dan-verifikasi)
 
 ### BAGIAN III: ALUR KERJA HARIAN (DAILY WORKFLOW)
 5. [Alur Kerja Harian (Daily Workflow)](#5-alur-kerja-harian-daily-workflow)
 6. [Koneksi dengan Autopilot SITL & Mission Planner](#6-koneksi-dengan-autopilot-sitl--mission-planner)
-7. [Panduan Manajemen Perintah Docker (Laptop vs Drone SBC)](#7-panduan-manajemen-perintah-docker-laptop-vs-drone-sbc)
+7. [Panduan Manajemen Perintah Docker](#7-panduan-manajemen-perintah-docker)
 
 ### BAGIAN IV: MANIFESTO PROYEK DRONE AUTONOMOUS (STRUKTUR & ARSITEKTUR)
 8. [Struktur Direktori & Mekanisme Berbagi File (Volume Mount)](#8-struktur-direktori--mekanisme-berbagi-file-volume-mount)
@@ -62,25 +61,21 @@ Diagram berikut menjelaskan bagaimana komponen perangkat lunak di Windows, WSL2,
 graph TD
     subgraph WH ["Windows Host (PC/Laptop)"]
         MP["Mission Planner / SITL Autopilot"]
-        NV_Win["Driver NVIDIA GPU Windows"]
     end
 
     subgraph WSL ["WSL2 Environment (Ubuntu 24.04)"]
-        Docker["Docker Engine Native"] <--> NV_WSL["NVIDIA Container Toolkit"]
+        Docker["Docker Engine Native"]
         WSLg["WSLg - Server Antarmuka Grafis"]
     end
 
     subgraph DC ["Docker Container"]
-        subgraph DF ["dev_full (GUI + GPU)"]
-            ROS2["ROS 2 Jazzy"] <--> MAVROS["Node MAVROS"]
-            GZ["Simulator Gazebo Harmonic"] <--> GPU["Akses GPU Passthrough"]
+        subgraph DF ["vtol_dev (ROS2 & MAVROS)"]
+            ROS2["ROS 2 Jazzy (Desktop)"] <--> MAVROS["Node MAVROS"]
         end
     end
 
     MP <-->|Komunikasi Jaringan TCP: WIN_IP| MAVROS
-    NV_Win --> NV_WSL
-    NV_WSL --> GPU
-    WSLg <-->|Meneruskan Tampilan Grafis 3D| GZ
+    WSLg <-->|Meneruskan Tampilan Grafis (RViz, etc.)| ROS2
 ```
 
 ---
@@ -89,13 +84,12 @@ graph TD
 
 Untuk memastikan simulasi 3D berjalan dengan lancar, pastikan PC/Laptop Anda memenuhi spesifikasi berikut:
 
-### Spesifikasi Perangkat Keras (Minimum & Rekomendasi)
-| Komponen | Spesifikasi Minimum (Versi Lite) | Spesifikasi Rekomendasi (Versi Full + Gazebo) |
-| :--- | :--- | :--- |
-| **CPU** | Intel Core i5 / AMD Ryzen 5 (Generasi 8+) | Intel Core i7 / AMD Ryzen 7 |
-| **RAM** | 8 GB | 16 GB atau lebih |
-| **GPU** | VGA Terintegrasi (Intel HD/AMD Radeon) | NVIDIA Dedicated GPU (GTX 1050 / RTX Series+) |
-| **Storage** | 10 GB ruang kosong (SSD sangat disarankan) | 30 GB ruang kosong (SSD) |
+### Spesifikasi Perangkat Keras
+| Komponen | Spesifikasi Minimum |
+| :--- | :--- |
+| **CPU** | Intel Core i5 / AMD Ryzen 5 (Generasi 8+) |
+| **RAM** | 8 GB |
+| **Storage** | 10 GB ruang kosong (SSD sangat disarankan) |
 
 ### Langkah Persiapan di Windows (Sebelum Mulai)
 1.  **Update Driver VGA NVIDIA (Khusus pengguna NVIDIA):**
@@ -161,84 +155,32 @@ Jika tidak muncul pesan error dan terminal menampilkan daftar tabel kosong, bera
 
 ---
 
-### Langkah 3: Instalasi NVIDIA Container Toolkit
-*(Langkah ini khusus untuk laptop yang memiliki kartu grafis diskrit **NVIDIA**. Jika laptop Anda hanya menggunakan Intel HD atau AMD Radeon terintegrasi, Anda bisa melewati langkah ini).*
-
-Langkah ini diperlukan agar kontainer Docker Anda dapat mendeteksi dan menggunakan kekuatan GPU NVIDIA Anda untuk rendering 3D di Gazebo.
-
-Di dalam terminal **Ubuntu (WSL)**, jalankan:
-
-```bash
-# 1. Unduh dan daftarkan kunci keamanan repositori NVIDIA
-curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
-
-# 2. Daftarkan repositori toolkit NVIDIA ke sistem Ubuntu
-curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-
-# 3. Instal NVIDIA Container Toolkit
-sudo apt-get update
-sudo apt-get install -y nvidia-container-toolkit
-
-# 4. Konfigurasi runtime Docker agar mengenali kartu grafis NVIDIA
-sudo nvidia-ctk runtime configure --runtime=docker
-
-# 5. Mulai ulang layanan Docker di WSL Anda
-sudo service docker restart
-```
-
----
-
-### Langkah 4: Clone Repositori & Jalankan Kontainer (dev_lite / dev_full)
+### Langkah 3: Clone Repositori & Jalankan Kontainer
 1.  **Clone Repositori:**
     Buka terminal **Ubuntu (WSL)** Anda, lalu unduh kode repositori pengembangan ini ke lokal Anda:
     ```bash
     git clone https://github.com/qois51/dev-ros2-docker-wsl.git ~/vtol_dev
     cd ~/vtol_dev
     ```
-2.  **Pilih dan Bangun Target Kontainer:**
-    Anda dapat memilih membangun kontainer yang sesuai dengan PC Anda:
-    *   **Jika PC Anda High-End (Gunakan dev_full untuk simulator Gazebo 3D + GPU Passthrough):**
-        ```bash
-        docker compose build dev_full
-        ```
-    *   **Jika PC Anda berspesifikasi rendah/Laptop Kentang (Gunakan dev_lite untuk visualisasi RViz saja):**
-        ```bash
-        docker compose build dev_lite
-        ```
-3.  **Jalankan Kontainer Pilihan Anda:**
-    *   Jika Anda menggunakan versi **FULL**:
-        ```bash
-        docker compose up -d dev_full
-        ```
-    *   Jika Anda menggunakan versi **LITE**:
-        ```bash
-        docker compose up -d dev_lite
-        ```
-    *(Catatan: Pastikan untuk menyertakan nama container (`dev_full` atau `dev_lite`) di akhir perintah `docker compose up -d` agar Docker hanya menyalakan kontainer yang sesuai, bukan membangun/menjalankan segalanya sekaligus).*
+2.  **Bangun Image Kontainer:**
+    ```bash
+    docker compose build
+    ```
+3.  **Jalankan Kontainer:**
+    ```bash
+    docker compose up -d
+    ```
 
 ---
 
-### Langkah 5: Eksekusi dan Verifikasi
+### Langkah 4: Eksekusi dan Verifikasi
 Untuk memverifikasi bahwa kontainer berhasil terpasang dan siap digunakan:
 
 1.  **Masuk ke dalam kontainer yang menyala:**
-    *   Jika Anda menggunakan kontainer **FULL**:
-        ```bash
-        docker exec -it vtol_full bash
-        ```
-    *   Jika Anda menggunakan kontainer **LITE**:
-        ```bash
-        docker exec -it vtol_lite bash
-        ```
-2.  **Cek Konektivitas GUI & GPU (Khusus versi FULL):**
-    Di dalam kontainer `vtol_full`, jalankan perintah:
     ```bash
-    gz --version
+    docker exec -it vtol_dev bash
     ```
-    *Jika muncul version dari gazebo, installasi berhasil.*
-3.  **Cek Deteksi IP Windows Host:**
+2.  **Cek Deteksi IP Windows Host:**
     Di dalam kontainer, jalankan:
     ```bash
     echo $WIN_IP
@@ -263,18 +205,14 @@ Bagaimana cara menggunakan lingkungan pengembangan ini setiap harinya? Ini adala
     cd ~/vtol_dev
     git pull origin main
     ```
-4.  **Nyalakan Kontainer Pilihan Anda:**
-    *   Untuk versi **FULL**:
-        ```bash
-        docker compose up -d dev_full
-        ```
-    *   Untuk versi **LITE**:
-        ```bash
-        docker compose up -d dev_lite
-        ```
+4.  **Nyalakan Kontainer:**
+    ```bash
+    docker compose up -d
+    ```
 5.  **Masuk ke Dalam Lingkungan Kontainer Linux ROS2:**
-    *   Untuk kontainer **FULL**: `docker exec -it vtol_full bash`
-    *   Untuk kontainer **LITE**: `docker exec -it vtol_lite bash`
+    ```bash
+    docker exec -it vtol_dev bash
+    ```
 6.  **Setelah Selesai Bekerja:**
     Keluar dari kontainer dengan mengetik `exit`, lalu matikan kontainer Docker Anda agar tidak memakan memori RAM laptop Anda di latar belakang:
     ```bash
@@ -305,11 +243,11 @@ Langkah-langkah koneksi:
     *   Klik tombol ikon wahana **Plane** atau **QuadPlane** (VTOL).
     *   Mission Planner akan mengunduh firmware secara otomatis, memulai simulator penerbangan SITL secara mandiri, dan langsung tersambung secara otomatis (*Auto-connect*). Anda **tidak perlu menginput IP address manual** di langkah ini karena semuanya sudah ditangani langsung oleh antarmuka Mission Planner.
 2.  **Jalankan Jembatan MAVROS di Kontainer Docker (WSL):**
-    *   Buka terminal Ubuntu WSL Anda dan masuk ke kontainer (contoh `vtol_full`):
+    *   Buka terminal Ubuntu WSL Anda dan masuk ke kontainer:
         ```bash
-        docker exec -it vtol_full bash
+        docker exec -it vtol_dev bash
         ```
-    *   Jalankan node MAVROS untuk tersambung ke simulator di Windows menggunakan port MAVLink TCP bawaan (biasanya `5762` atau `5760`):
+    *   Jalankan node MAVROS untuk tersambung ke simulator di Windows menggunakan port MAVLink TCP bawaan (biasanya `5762` or `5760`):
         ```bash
         ros2 run mavros mavros_node --ros-args -p fcu_url:="tcp://$WIN_IP:5762"
         ```
@@ -317,7 +255,7 @@ Langkah-langkah koneksi:
     *   Buka tab terminal Ubuntu WSL baru (biarkan MAVROS tetap menyala di terminal pertama).
     *   Masuk kembali ke dalam kontainer:
         ```bash
-        docker exec -it vtol_full bash
+        docker exec -it vtol_dev bash
         ```
     *   Tampilkan semua topik aktif yang sedang diterbitkan oleh MAVROS:
         ```bash
@@ -331,47 +269,28 @@ Langkah-langkah koneksi:
 
 ---
 
-## 7. Panduan Manajemen Perintah Docker (Laptop vs Drone SBC)
+## 7. Panduan Manajemen Perintah Docker
 
-Ketika Anda melakukan pengodean di laptop, Anda tentu ingin melihat visualisasi 3D yang megah di Gazebo. Namun, saat kode tersebut dimasukkan ke dalam komputer penerbangan drone asli (misal Raspberry Pi atau NVIDIA Jetson), kita harus membuang simulator Gazebo agar performa drone tetap stabil dan ringan.
+Berikut adalah perintah-perintah dasar Docker Compose untuk mengelola kontainer VTOL Anda:
 
-Di sinilah keunggulan sistem **Multi-stage Build** yang kita miliki.
-
-### Skenario A: Pengembangan di Laptop/PC (Docker Compose)
-Gunakan perintah Docker Compose untuk memilih lingkungan simulasi:
-
-*   **Untuk Build versi FULL (Simulasi Lengkap + Gazebo + GPU Passthrough):**
+*   **Membangun Ulang Image:**
     ```bash
-    docker compose build dev_full
+    docker compose build
     ```
-*   **Untuk Build versi LITE (Laptop Tanpa GPU / Hanya Ingin Visualisasi Data Ringan):**
+*   **Menjalankan Kontainer:**
     ```bash
-    docker compose build dev_lite
+    docker compose up -d
     ```
-*   **Untuk Menjalankan (Sesuai Pilihan):**
-    *   Untuk versi **FULL**:
-        ```bash
-        docker compose up -d dev_full
-        ```
-    *   Untuk versi **LITE**:
-        ```bash
-        docker compose up -d dev_lite
-        ```
-
----
-
-### Skenario B: Deployment ke Komputer Drone Fisik (SBC ARM64)
-SBC (Single Board Computer) seperti Raspberry Pi menggunakan arsitektur prosesor **ARM64**, berbeda dengan laptop yang menggunakan **x86_64**. Oleh karena itu, **Anda wajib melakukan build image langsung di dalam SBC tersebut.**
-
-1.  Salin file `Dockerfile` ke dalam penyimpanan Raspberry Pi / Jetson Anda.
-2.  Buka terminal di SBC Anda, lalu jalankan perintah pemotongan target ini:
+*   **Masuk ke Kontainer:**
     ```bash
-    docker build --target sbc -t vtol_drone_sbc:latest .
+    docker exec -it vtol_dev bash
+    ```
+*   **Menghentikan Kontainer:**
+    ```bash
+    docker compose down
     ```
 
-> [!TIP]
-> **Mengapa perintah ini penting bagi pemula?**
-> Bendera `--target sbc` menginstruksikan Docker untuk **berhenti** menginstal program tepat setelah *Stage 1 (SBC)* selesai. Semua perintah instalasi simulator Gazebo 3D yang sangat berat di baris-baris bawah `Dockerfile` akan diabaikan sepenuhnya. Hasilnya, Anda mendapatkan sistem container terbang yang sangat kecil dan ringan (kurang dari 1 GB), menghemat RAM serta ruang kartu SD drone Anda!
+Untuk deployment ke komputer drone fisik (SBC ARM64) seperti Raspberry Pi atau NVIDIA Jetson, Anda dapat menyalin file `Dockerfile` dan menjalankan build secara native pada SBC tersebut menggunakan perintah build yang sama.
 
 ---
 
@@ -453,9 +372,9 @@ workspace/
 Bila Anda ingin memaketkan kode Python Anda menjadi modul yang rapi dan terstandarisasi di ROS2 (misal untuk monitoring sensor, auto-takeoff, dll.), ikuti langkah-langkah di bawah ini.
 
 ### Langkah 1: Masuk ke Kontainer & Buat Package
-1. Masuk ke kontainer yang berjalan (disarankan versi `FULL` atau `LITE`):
+1. Masuk ke kontainer yang berjalan:
    ```bash
-   docker exec -it vtol_full bash
+   docker exec -it vtol_dev bash
    ```
 2. Pindah ke direktori workspace utama dan buat package berbasis Python dengan dependensi `rclpy` dan `mavros_msgs`:
    ```bash
