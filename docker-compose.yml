@@ -21,7 +21,9 @@ services:
       target: sbc
     container_name: vtol_sbc
     network_mode: host
+    privileged: true
     volumes:
       - ./workspace:/home/pilot/workspace
+      - /dev:/dev
     stdin_open: true
     tty: true
