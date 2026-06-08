@@ -305,7 +305,7 @@ Berikut adalah perintah-perintah dasar Docker Compose untuk mengelola kontainer 
     docker compose down
     ```
 
-Untuk deployment ke komputer drone fisik (SBC ARM64) seperti Raspberry Pi atau NVIDIA Jetson, Anda dapat menggunakan Docker Buildx untuk mem-build image ARM64 di PC, mengekspornya ke format tar, mentransfer via SCP, dan me-load di Raspberry Pi. 
+Untuk deployment ke komputer drone fisik (SBC ARM64) seperti Raspberry Pi atau NVIDIA Jetson, Anda dapat melakukan setup awal, git clone via SSH, dan melakukan build secara native langsung pada Raspberry Pi. 
 
 Panduan lengkap langkah demi langkah dapat diakses di:
 👉 **[Panduan Khusus Deployment ke SBC (Raspberry Pi)](docs/sbc_deployment.md)**

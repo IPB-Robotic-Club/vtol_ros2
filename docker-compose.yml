@@ -21,7 +21,11 @@ services:
       target: sbc
     container_name: vtol_sbc
     network_mode: host
+    privileged: true
     volumes:
       - ./workspace:/home/pilot/workspace
+      - /dev:/dev
     stdin_open: true
     tty: true
+    command: >
+      sh -c "mavproxy.py --master=/dev/ttyACM1,921600 --streamrate=10 --out=udpin:0.0.0.0:14550 --out=udp:127.0.0.1:14555"
