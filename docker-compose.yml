@@ -28,4 +28,4 @@ services:
     stdin_open: true
     tty: true
     command: >
-      sh -c "mavproxy.py --master=/dev/ttyACM1,921600 --streamrate=10 --out=udpin:0.0.0.0:14550 --out=udp:127.0.0.1:14555"
+      sh -c "mavproxy.py --master=/dev/ttyACM0,921600 --streamrate=10 --out=udpin:0.0.0.0:14550 --out=udp:127.0.0.1:14555"
