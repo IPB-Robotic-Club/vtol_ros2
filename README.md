@@ -159,11 +159,11 @@ Jika tidak muncul pesan error dan terminal menampilkan daftar tabel kosong, bera
 ---
 
 ### Langkah 3: Clone Repositori & Jalankan Kontainer (dev / sbc)
-1.  **Clone Repositori:**
-    Buka terminal **Ubuntu (WSL)** Anda, lalu unduh kode repositori pengembangan ini ke lokal Anda:
+1.  **Clone Repositori (Menggunakan SSH):**
+    Buka terminal **Ubuntu (WSL)** Anda, lalu unduh kode repositori pengembangan ini menggunakan SSH key (nama folder menggunakan tilda `~`):
     ```bash
-    git clone https://github.com/IPB-Robotic-Club/vtol_ros2.git ~/vtol_dev
-    cd ~/vtol_dev
+    git clone git@github.com:IPB-Robotic-Club/vtol_ros2.git ~/vtol-dev
+    cd ~/vtol-dev
     ```
 2.  **Membangun Image Kontainer (Sesuai Kebutuhan):**
     *   **Untuk Pengembangan di PC/Laptop (Rekomendasi Utama):**
@@ -220,9 +220,9 @@ Bagaimana cara menggunakan lingkungan pengembangan ini setiap harinya? Ini adala
     sudo service docker start
     ```
 3.  **Masuk ke Folder Project & Tarik Update Terbaru:**
-    Lakukan `git pull` setiap hari agar Anda selalu mendapatkan pembaruan file dan dockerfile terbaru dari repositori utama:
+    Lakukan `git pull origin main` setiap hari agar Anda selalu mendapatkan pembaruan file dan dockerfile terbaru dari repositori utama:
     ```bash
-    cd ~/vtol_dev
+    cd ~/vtol-dev
     git pull origin main
     ```
 4.  **Nyalakan Kontainer:**
@@ -305,7 +305,7 @@ Berikut adalah perintah-perintah dasar Docker Compose untuk mengelola kontainer 
     docker compose down
     ```
 
-Untuk deployment ke komputer drone fisik (SBC ARM64) seperti Raspberry Pi atau NVIDIA Jetson, Anda dapat menggunakan Docker Buildx untuk mem-build image ARM64 di PC, mengekspornya ke format tar, mentransfer via SCP, dan me-load di Raspberry Pi. 
+Untuk deployment ke komputer drone fisik (SBC ARM64) seperti Raspberry Pi atau NVIDIA Jetson, Anda dapat melakukan setup awal, git clone via SSH, dan melakukan build secara native langsung pada Raspberry Pi. 
 
 Panduan lengkap langkah demi langkah dapat diakses di:
 👉 **[Panduan Khusus Deployment ke SBC (Raspberry Pi)](docs/sbc_deployment.md)**
@@ -319,13 +319,13 @@ Bagi pemula, konsep penyimpanan Docker terkadang membingungkan. Jika Anda mengha
 Kami menggunakan fitur bernama **Volume Mount** (atau bind mount) yang menjembatani folder di komputer asli Anda dengan folder di dalam kontainer.
 
 ### Pemetaan Folder
-*   Folder fisik di komputer Anda: `~/vtol_dev/workspace`
+*   Folder fisik di komputer Anda: `~/vtol-dev/workspace`
 *   Terhubung langsung ke folder di dalam kontainer: `/home/pilot/workspace`
 
 ```
   KOMPUTER ANDA (WSL)                 KONTAINER DOCKER
  ┌──────────────────────┐            ┌──────────────────────┐
- │ ~/vtol_dev/          │            │ /home/pilot/         │
+ │ ~/vtol-dev/          │            │ /home/pilot/         │
  │  ├── Dockerfile      │            │                      │
  │  ├── docker-compose  │            │                      │
  │  └── workspace/  ◄───┼──(Jembatan)┼───► workspace/       │
@@ -334,7 +334,7 @@ Kami menggunakan fitur bernama **Volume Mount** (atau bind mount) yang menjembat
 ```
 
 ### Keuntungan Utama:
-Anda bisa membuka VS Code di Windows, mengedit file python di dalam folder `~/vtol_dev/workspace`, dan seketika itu juga file tersebut akan terupdate di dalam kontainer Docker Anda untuk dijalankan menggunakan ROS2! Anda tidak perlu mengetik kode menggunakan editor terminal yang menyulitkan seperti `nano` or `vi`.
+Anda bisa membuka VS Code di Windows, mengedit file python di dalam folder `~/vtol-dev/workspace`, dan seketika itu juga file tersebut akan terupdate di dalam kontainer Docker Anda untuk dijalankan menggunakan ROS2! Anda tidak perlu mengetik kode menggunakan editor terminal yang menyulitkan seperti `nano` or `vi`.
 
 ---
 
@@ -349,7 +349,7 @@ Saat merancang arsitektur sistem kendali drone autonomous secara *full stack* (d
 
 ### Rekomendasi Struktur Workspace Modular (Kasus: ArUco Precision Landing)
 
-Berikut adalah struktur direktori workspace ideal (`~/vtol_dev/workspace/src/`) untuk sistem drone autonomous yang menggunakan **ArUco Marker** untuk presisi pendaratan:
+Berikut adalah struktur direktori workspace ideal (`~/vtol-dev/workspace/src/`) untuk sistem drone autonomous yang menggunakan **ArUco Marker** untuk presisi pendaratan:
 
 ```text
 workspace/

@@ -25,7 +25,7 @@ RUN mkdir -p /usr/share/GeographicLib \
     && geographiclib-get-magnetic wmm2020
 
 # Install Python requirements
-RUN pip3 install --no-cache-dir --break-system-packages future pymavlink dronekit mavproxy numpy pandas
+RUN pip3 install --no-cache-dir --break-system-packages future pymavlink mavproxy
 
 # Setup custom user 'pilot' using the existing 'ubuntu' user
 ARG USERNAME=pilot
@@ -71,7 +71,7 @@ RUN mkdir -p /usr/share/GeographicLib \
     && geographiclib-get-magnetic wmm2020
 
 # Install Python requirements
-RUN pip3 install --no-cache-dir --break-system-packages future pymavlink dronekit mavproxy numpy pandas
+RUN pip3 install --no-cache-dir --break-system-packages future pymavlink mavproxy
 
 # Setup custom user 'pilot' using the existing 'ubuntu' user
 ARG USERNAME=pilot
