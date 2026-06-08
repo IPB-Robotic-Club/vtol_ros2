@@ -1,109 +1,140 @@
 # Panduan Deployment ke Single Board Computer (SBC) - Raspberry Pi (ARM64)
 
-Dokumen ini menjelaskan langkah-langkah lengkap untuk mem-build, mentransfer, dan menjalankan kontainer Docker VTOL (`sbc`) pada perangkat Raspberry Pi secara offline tanpa memerlukan login Docker Hub.
+Dokumen ini menjelaskan langkah-langkah lengkap untuk melakukan setup awal, membangun image (*native build*), dan menjalankan kontainer Docker VTOL (`sbc`) secara langsung pada perangkat Raspberry Pi.
 
 ---
 
 ## Daftar Isi
 - [BAGIAN I: SETUP AWAL (Hanya Sekali Setup)](#bagian-i-setup-awal-hanya-sekali-setup)
-  - [1. Konfigurasi Docker Buildx di PC/WSL](#1-konfigurasi-docker-buildx-di-pcwsl)
-  - [2. Clone Repositori di Raspberry Pi](#2-clone-repositori-di-raspberry-pi)
+  - [1. Generate SSH Key & Hubungkan ke GitHub](#1-generate-ssh-key--hubungkan-ke-github)
+  - [2. Clone Repositori menggunakan SSH](#2-clone-repositori-menggunakan-ssh)
+  - [3. Build Image secara Native di Raspberry Pi](#3-build-image-secara-native-di-raspberry-pi)
 - [BAGIAN II: ALUR HARIAN / SETIAP UPDATE (Daily Workflow)](#bagian-ii-alur-harian--setiap-update-daily-workflow)
-  - [1. Build Image ARM64 di PC](#1-build-image-arm64-di-pc)
-  - [2. Ekspor Image ke File Tar](#2-ekspor-image-ke-file-tar)
-  - [3. Transfer File Tar ke Raspberry Pi (SCP)](#3-transfer-file-tar-ke-raspberry-pi-scp)
-  - [4. Impor & Jalankan di Raspberry Pi](#4-impor--jalankan-di-raspberry-pi)
+  - [1. Tarik Pembaruan Kode (Git Pull)](#1-tarik-pembaruan-kode-git-pull)
+  - [2. Bangun Ulang Image (Jika Ada Perubahan Dockerfile)](#2-bangun-ulang-image-jika-ada-perubahan-dockerfile)
+  - [3. Jalankan Kontainer](#3-jalankan-kontainer)
+- [BAGIAN III: PENGUJIAN KONEKSI PIXHAWK (MAVROS)](#bagian-iii-pengujian-koneksi-pixhawk-mavros)
+  - [1. Jalankan Node MAVROS](#1-jalankan-node-mavros)
+  - [2. Verifikasi Konektivitas Pixhawk](#2-verifikasi-konektivitas-pixhawk)
 
 ---
 
 ## BAGIAN I: SETUP AWAL (Hanya Sekali Setup)
 
-Bagian ini hanya perlu dijalankan sekali saat pertama kali menyiapkan lingkungan pengembangan Anda.
+Jalankan langkah-langkah ini saat pertama kali menyiapkan Raspberry Pi Anda.
 
-### 1. Konfigurasi Docker Buildx di PC/WSL
-Agar PC Anda (x86_64) bisa membuat image untuk Raspberry Pi (ARM64), Anda perlu mengaktifkan emulator QEMU dan membuat builder khusus.
+### 1. Generate SSH Key & Hubungkan ke GitHub
+Karena repositori proyek ini bersifat **Private**, Raspberry Pi memerlukan akses autentikasi menggunakan SSH Key untuk melakukan clone.
 
-1. **Aktifkan Emulator QEMU:**
+1. **Generate SSH Key baru di Raspberry Pi:**
+   Buka terminal Raspberry Pi Anda, lalu jalankan:
    ```bash
-   docker run --privileged --rm tonistiigi/binfmt --install all
+   ssh-keygen -t ed25519 -C "email_anda@example.com"
    ```
+   *Tekan Enter terus menerus untuk menyetujui lokasi penyimpanan default dan tanpa passphrase.*
 
-2. **Buat Builder Baru (Driver docker-container):**
+2. **Salin Public Key yang Dihasilkan:**
+   Tampilkan isi file public key Anda dengan:
    ```bash
-   docker buildx create --name vtol_builder --use
+   cat ~/.ssh/id_ed25519.pub
    ```
+   *Blok dan salin seluruh teks yang muncul (dimulai dengan `ssh-ed25519` sampai email Anda).*
 
-3. **Bootstrap/Inisialisasi Builder:**
+3. **Masukkan Public Key ke Akun GitHub:**
+   * Masuk ke GitHub Anda, lalu buka **Settings** > **SSH and GPG keys**.
+   * Klik tombol **New SSH key**.
+   * Beri judul (misal: `Raspberry Pi VTOL Drone`).
+   * Tempelkan teks public key yang tadi disalin ke dalam kotak **Key**.
+   * Klik **Add SSH key**.
+
+4. **Uji Koneksi SSH ke GitHub:**
    ```bash
-   docker buildx inspect --bootstrap
+   ssh -T git@github.com
    ```
+   *Jika muncul konfirmasi sidik jari (fingerprint), ketik `yes`. Jika sukses, akan muncul pesan seperti: "Hi username! You've successfully authenticated...".*
 
-4. **Verifikasi Setup:**
-   ```bash
-   docker buildx ls
-   ```
-   *Pastikan `linux/arm64` terdaftar di bawah platform yang didukung.*
-
-### 2. Clone Repositori di Raspberry Pi
-Hubungkan Raspberry Pi ke internet untuk pertama kali, lalu unduh repositori ini untuk mendapatkan folder `workspace` dan file `docker-compose.yml`:
+### 2. Clone Repositori menggunakan SSH
+Setelah autentikasi SSH aktif, Anda dapat melakukan clone repositori private ke folder home (`~/vtol-dev`):
 ```bash
-git clone https://github.com/IPB-Robotic-Club/vtol_ros2.git ~/vtol_dev
-cd ~/vtol_dev
+git clone git@github.com:IPB-Robotic-Club/vtol_ros2.git ~/vtol-dev
+cd ~/vtol-dev
 ```
+
+### 3. Build Image secara Native di Raspberry Pi
+Mengingat image dijalankan langsung di Raspberry Pi, lakukan proses build secara lokal pada Pi untuk target `sbc`:
+```bash
+docker compose build sbc
+```
+*(Catatan: Proses ini memerlukan koneksi internet aktif karena Docker akan mengunduh base image `ros:jazzy-ros-base` dan melakukan instalasi library robotika yang dibutuhkan. Proses ini memakan waktu sekitar 10-20 menit pada Raspberry Pi 4/5).*
 
 ---
 
 ## BAGIAN II: ALUR HARIAN / SETIAP UPDATE (Daily Workflow)
 
-Ikuti alur ini setiap kali Anda mengubah kode program di PC dan ingin menerapkannya (deploy) ke Raspberry Pi.
+Ikuti alur ini ketika Anda melakukan coding di PC/Laptop dan ingin menerapkannya di drone (SBC).
 
-```mermaid
-graph TD
-    PC_Build["1. Build ARM64 di PC<br/>(docker buildx build)"] --> PC_Save["2. Simpan ke Tar<br/>(docker save)"]
-    PC_Save --> PC_Transfer["3. Transfer via SCP<br/>(scp)"]
-    PC_Transfer --> Pi_Load["4. Load Image di Pi<br/>(docker load)"]
-    Pi_Load --> Pi_Run["5. Jalankan Kontainer<br/>(docker compose up)"]
-```
-
-### 1. Build Image ARM64 di PC
-Jalankan perintah buildx untuk mem-build target `sbc` secara spesifik untuk arsitektur ARM64 dan memuatnya ke docker lokal PC Anda:
+### 1. Tarik Pembaruan Kode (Git Pull)
+Sebelum menjalankan program di drone, selalu pastikan kode workspace Anda di Raspberry Pi sinkron dengan perubahan terbaru dari repositori:
 ```bash
-docker buildx build --platform linux/arm64 --target sbc -t vtol_sbc:arm64 --load .
+cd ~/vtol-dev
+git pull origin main
 ```
 
-### 2. Ekspor Image ke File Tar
-Ubah image lokal tersebut menjadi file arsip `.tar` agar bisa dipindahkan:
+### 2. Bangun Ulang Image (Jika Ada Perubahan Dockerfile)
+*Hanya diperlukan* jika Anda memodifikasi file `Dockerfile` atau mengubah daftar dependensi sistem. Jika hanya script python di workspace yang berubah, langkah ini bisa dilewati:
 ```bash
-docker save -o vtol_sbc_arm64.tar vtol_sbc:arm64
+docker compose build sbc
 ```
 
-### 3. Transfer File Tar ke Raspberry Pi (SCP)
-Kirim file tar tersebut ke Raspberry Pi menggunakan jaringan lokal. Ganti `pi` dengan username dan `192.168.x.x` dengan IP Raspberry Pi Anda:
+### 3. Jalankan Kontainer
+Nyalakan kontainer target `sbc` agar berjalan di latar belakang:
 ```bash
-scp vtol_sbc_arm64.tar pi@192.168.x.x:/home/pi/
+docker compose up -d sbc
 ```
+*(Penting: pastikan tidak menggunakan flag `-t` agar syntax tidak error).*
 
-### 4. Impor & Jalankan di Raspberry Pi
-Buka terminal Raspberry Pi Anda (misal via SSH), lalu ikuti perintah berikut:
+---
 
-1. **Load Image dari File Tar:**
-   ```bash
-   docker load -i /home/pi/vtol_sbc_arm64.tar
-   ```
+## BAGIAN III: PENGUJIAN KONEKSI PIXHAWK (MAVROS)
 
-2. **Masuk ke Direktori Repositori:**
-   ```bash
-   cd ~/vtol_dev
-   ```
+Setelah kontainer berjalan, ikuti langkah berikut untuk menguji jembatan komunikasi antara komputer pendamping (Raspberry Pi) dengan Autopilot (Pixhawk) melalui serial port.
 
-3. **Jalankan Kontainer Target SBC:**
-   ```bash
-   docker compose up -d sbc
-   ```
-   *(Penting: pastikan tidak menggunakan flag `-t` agar syntax tidak error).*
-
-4. **Masuk ke Lingkungan Kontainer:**
+### 1. Jalankan Node MAVROS
+1. **Masuk ke dalam kontainer yang sedang berjalan:**
    ```bash
    docker exec -it vtol_sbc bash
    ```
-   *(Anda kini berada di dalam kontainer dan siap menjalankan node ROS2 atau program penerbangan drone).*
+
+2. **Jalankan Node MAVROS dengan parameter FCU URL:**
+   Hubungkan Pixhawk ke port USB Raspberry Pi (biasanya terbaca sebagai `/dev/ttyACM0`) dengan baudrate default Pixhawk `921600` (atau sesuaikan dengan port serial yang Anda gunakan):
+   ```bash
+   ros2 run mavros mavros_node --ros-args -p fcu_url:="/dev/ttyACM0:921600"
+   ```
+
+### 2. Verifikasi Konektivitas Pixhawk
+1. **Buka Terminal Raspberry Pi Baru** (biarkan node MAVROS tetap berjalan di terminal pertama).
+2. **Masuk kembali ke dalam kontainer:**
+   ```bash
+   docker exec -it vtol_sbc bash
+   ```
+3. **Cek State Koneksi MAVROS:**
+   Jalankan perintah berikut untuk melihat status koneksi jembatan data MAVLink:
+   ```bash
+   ros2 topic echo /mavros/state
+   ```
+
+4. **Verifikasi Output:**
+   Perhatikan bagian baris output log terminal Anda:
+   ```text
+   header:
+     stamp:
+       sec: 1718223948
+       nanosec: 450912000
+     frame_id: ''
+   connected: True    <--- PASTIKAN BENILAI TRUE!
+   armed: False
+   guided: False
+   mode: STABILIZE
+   system_status: 3
+   ```
+   *Jika `connected` bernilai `True`, selamat! Program kontrol ROS2 Anda di Raspberry Pi sudah tersambung sepenuhnya dengan Autopilot Pixhawk.*
