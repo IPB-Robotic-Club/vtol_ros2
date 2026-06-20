@@ -275,15 +275,7 @@ Langkah-langkah koneksi:
         ```bash
         docker exec -it vtol_dev bash
         ```
-    *   Tampilkan semua topik aktif yang sedang diterbitkan oleh MAVROS:
-        ```bash
-        ros2 topic list
-        ```
-    *   Jika data sensor autopilot berhasil tersambung, Anda akan melihat puluhan topik terdaftar (seperti `/mavros/state`, `/mavros/global_position/local`, dll.). Anda bisa membaca status koneksi dengan perintah:
-        ```bash
-        ros2 topic echo /mavros/state
-        ```
-        Jika baris log terminal menampilkan `connected: True`, berarti program kontrol ROS2 Anda di Docker sudah tersambung sepenuhnya dengan simulasi drone di Windows!
+    *   Untuk memantau topik aktif dan memverifikasi data sensor autopilot yang masuk, gunakan perintah pencarian status telemetri yang terdapat pada panduan di [panduan_perintah.md](docs/panduan_perintah.md). Jika status `connected` bernilai `True`, berarti program kontrol ROS2 di Docker sudah tersambung sepenuhnya dengan simulasi drone di Windows.
 
 ---
 
@@ -385,77 +377,15 @@ workspace/
 
 ---
 
-## 10. Panduan Pembuatan & Pengembangan ROS2 Package
+## 10. Konsep Pengembangan ROS2 Package (Teori)
 
-Bila Anda ingin memaketkan kode Python Anda menjadi modul yang rapi dan terstandarisasi di ROS2 (misal untuk monitoring sensor, auto-takeoff, dll.), ikuti langkah-langkah di bawah ini.
+Di dalam ekosistem ROS2, semua pengembangan kode (baik berupa node, launch file, maupun custom message) **harus dilakukan di dalam sebuah Package (paket)**.
 
-### Langkah 1: Masuk ke Kontainer & Buat Package
-1. Masuk ke kontainer yang berjalan:
-   ```bash
-   docker exec -it vtol_dev bash
-   ```
-2. Pindah ke direktori workspace utama dan buat package berbasis Python dengan dependensi `rclpy` dan `mavros_msgs`:
-   ```bash
-   cd ~/workspace
-   ros2 pkg create --build-type ament_python vtol_monitoring --dependencies rclpy mavros_msgs
-   ```
+### Mengapa Harus Menggunakan Package?
+1. **Struktur yang Terstandarisasi**: ROS2 menggunakan sistem build seperti `colcon` (menggunakan `ament_cmake` atau `ament_python`) untuk mengatur bagaimana kode dikompilasi, dipaketkan, dan diinstal ke dalam sistem robot. Tanpa package, ROS2 tidak dapat mengenali script python atau biner C++ Anda sebagai node yang valid.
+2. **Manajemen Dependensi**: Setiap package memiliki file manifest `package.xml` yang mendeklarasikan library pihak ketiga atau package ROS2 lain yang dibutuhkannya (misal `rclpy`, `mavros_msgs`). Hal ini memudahkan pelacakan dependensi saat kode dideploy ke lingkungan baru (misalnya ke drone fisik / SBC).
+3. **Pendaftaran Executable (Entry Points)**: Dalam package Python ROS2, executable didaftarkan di dalam file `setup.py` pada bagian `entry_points`. Hal ini memungkinkan kita untuk memanggil node menggunakan perintah `ros2 run <nama_package> <nama_node>` atau menyertakannya dalam launch file secara modular.
 
-### Langkah 2: Buat Node Baru
-Buat file python baru, misalnya `state_listener_node.py` di dalam folder `vtol_monitoring/vtol_monitoring/`:
-```python
-import rclpy
-from rclpy.node import Node
-from mavros_msgs.msg import State
-
-class MavrosStateListener(Node):
-    def __init__(self):
-        super().__init__('mavros_state_listener')
-        self.subscription = self.create_subscription(
-            State,
-            '/mavros/state',
-            self.state_callback,
-            10
-        )
-        self.get_logger().info('Node monitor /mavros/state telah aktif!')
-
-    def state_callback(self, msg):
-        self.get_logger().info(f'Connected: {msg.connected} | Armed: {msg.armed} | Mode: {msg.mode}')
-
-def main(args=None):
-    rclpy.init(args=args)
-    node = MavrosStateListener()
-    try:
-        rclpy.spin(node)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
-if __name__ == '__main__':
-    main()
-```
-
-### Langkah 3: Konfigurasi setup.py
-Buka file `setup.py` di folder root package (`vtol_monitoring/setup.py`), lalu daftarkan node Anda di dalam `entry_points` agar dapat dipanggil menggunakan perintah `ros2 run`:
-```python
-    entry_points={
-        'console_scripts': [
-            'state_listener = vtol_monitoring.state_listener_node:main',
-        ],
-    },
-```
-
-### Langkah 4: Kompilasi Workspace & Jalankan
-Kembali ke root workspace (`~/workspace`) lalu jalankan `colcon build`:
-```bash
-cd ~/workspace
-colcon build --packages-select vtol_monitoring
-```
-Setelah kompilasi selesai, jalankan source dan node Anda:
-```bash
-source install/setup.bash
-ros2 run vtol_monitoring state_listener
-```
+Dengan menggunakan arsitektur berbasis package, kode kendali drone Anda akan tetap bersih, terorganisir, dan sangat mudah untuk dideploy ke berbagai perangkat target (SITL laptop maupun pendamping drone fisik).
 
 ---

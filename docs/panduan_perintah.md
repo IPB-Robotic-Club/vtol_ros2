@@ -9,12 +9,10 @@ Dokumen ini berisi rangkuman seluruh perintah penting untuk mengelola, menjalank
 Karena ROS 2 dan MAVROS berjalan sebagai proses latar belakang di dalam kontainer Docker, proses tersebut kadang-kadang tidak tertutup dengan bersih saat terminal dihentikan. Gunakan perintah berikut untuk menghentikan dan memeriksa sisa proses yang menggantung:
 
 ### A. Menghentikan Semua Proses Sekaligus (Direkomendasikan)
-Untuk mematikan seluruh proses node watchdog (`vtol_core`), status HUD (`vehicle_status`), tester (`test_arm`/`mission_hover`), serta wrapper MAVROS sekaligus:
+Untuk mematikan seluruh proses node watchdog (`vtol_core`), status HUD (`vehicle_status`), tester (`test_arm`/`mission_hover`/`mission_maneuver`), serta wrapper MAVROS sekaligus:
 ```bash
 pkill -f -9 "vtol|mavros|ros2"
 ```
-> [!NOTE]
-> Perintah `pkill -f -9 ros2` saja **tidak cukup** untuk mematikan MAVROS atau `vtol_core`, karena biner eksekusi asli mereka berjalan tanpa memuat substring kata `"ros2"` pada argumen baris perintahnya.
 
 ### B. Memeriksa Sisa Proses yang Aktif
 Untuk memastikan tidak ada proses duplikat atau sisa proses yang menggantung:
@@ -47,8 +45,7 @@ Setiap kali Anda melakukan perubahan pada file Python (`.py`), file launch (`.la
     ```
 *   **Source Environment (Wajib dijalankan setelah kompilasi di terminal baru):**
     ```bash
-    source /opt/ros/jazzy/setup.bash
-    source /home/pilot/workspace/install/setup.bash
+    source instal/setup.bash
     ```
 
 ---
@@ -70,7 +67,7 @@ Pastikan Anda selalu men-*source* environment terlebih dahulu sebelum menjalanka
     ```
 
 *   **Opsi C: Jalankan Menu Launcher Utama (CLI Menu)**
-    *Menampilkan menu CLI interaktif untuk memilih program (HUD, Uji Coba Arming, Misi Hover).*
+    *Menampilkan menu CLI interaktif untuk memilih program (HUD, Uji Coba Arming, Misi Hover, Misi Maneuver).*
     ```bash
     ros2 run vtol_control menu_launcher
     ```
@@ -111,26 +108,3 @@ Gunakan perintah-perintah ini untuk memeriksa kesehatan dan komunikasi data dron
     ```bash
     ros2 topic echo /mavros/battery
     ```
-
----
-
-## 5. Troubleshooting: Jika MAVROS Stuck / Menunggu Lama
-
-Jika node watchdog terus-menerus mencetak `Waiting for MAVROS state messages...` lebih dari 45 detik, ada dua kemungkinan penyebab utama:
-
-### Opsi A: Simulator SITL di Host Windows Membeku (*Freeze*)
-SITL ArduPilot di Windows kadang-kadang berhenti mengirimkan data (misal setelah laptop masuk mode sleep). 
-*   **Solusi**: Tutup konsol SITL ArduPilot di Windows Anda, lalu jalankan kembali simulator SITL tersebut.
-
-### Opsi B: Gangguan DDS Shared Memory di WSL2 (DDS Lockup)
-Proses ROS 2 yang dimatikan paksa berulang kali dapat merusak segmen memori bersama (*shared memory*) pada WSL2, sehingga komunikasi antar-node tersumbat.
-*   **Solusi**:
-    1. Bersihkan seluruh proses ROS 2 dan MAVROS yang menggantung di kontainer:
-       ```bash
-       pkill -f -9 "vtol|mavros|ros2"
-       ```
-    2. Aktifkan konfigurasi FastDDS bypass shared memory (memaksa memakai UDP loopback) dengan mengekspor variabel lingkungan berikut sebelum menjalankan launch file:
-       ```bash
-       export FASTRTPS_DEFAULT_PROFILES_FILE=/home/pilot/workspace/fastdds.xml
-       ```
-    3. Jalankan kembali launch file seperti biasa. Konfigurasi `fastdds.xml` ini akan menjamin jalur komunikasi DDS selalu bersih dan bebas dari *infinite spin-lock*!

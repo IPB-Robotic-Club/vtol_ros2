@@ -1,6 +1,6 @@
 # Bedah & Struktur Kode Program `vtol_core.py` (Basic)
 
-Dokumen ini menjelaskan baris demi baris cara kerja kode program **[vtol_core.py](file:///wsl.localhost/Ubuntu-24.04/home/qois51/vtol-dev/workspace/src/vtol_control/vtol_control/vtol_core.py)**. Program ini berfungsi sebagai *state listener* telemetri drone dan meminta *stream rate* telemetri MAVROS saat terhubung.
+Dokumen ini menjelaskan baris demi baris cara kerja kode program **[vtol_core.py](../workspace/src/vtol_control/vtol_control/vtol_core.py)**. Program ini berfungsi sebagai *state listener* telemetri drone dan meminta *stream rate* telemetri MAVROS saat terhubung.
 
 ---
 

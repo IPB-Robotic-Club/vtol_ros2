@@ -49,36 +49,25 @@ Mengontrol drone seberat beberapa kilogram dengan baling-baling berputar tinggi 
 
 ---
 
-## 4. Cara Kerja Node `vtol_core` (Core Watchdog & Safety Failsafe)
+## 4. Cara Kerja Node `vtol_core` (Core Monitor)
 
-Node pemantau inti (**[vtol_core.py](file:///wsl.localhost/Ubuntu-24.04/home/qois51/vtol-dev/workspace/src/vtol_control/vtol_control/vtol_core.py)**) berjalan secara diam (*silent*) di latar belakang dan memantau status wahana demi keamanan:
+Node pemantau inti (**[vtol_core.py](../workspace/src/vtol_control/vtol_control/vtol_core.py)**) berjalan secara diam (*silent*) di latar belakang dan memantau status dasar wahana:
 
 ```
 [Start Node]
     │
     ▼
 [Mencoba Berlangganan ke Topik MAVROS]
-    ├── /mavros/state  (Mendapatkan info Koneksi, Arming, Mode Terbang)
-    ├── /mavros/battery (Mendapatkan Tegangan & Sisa Kapasitas Baterai)
-    └── /mavros/local_position/pose (Mendapatkan Koordinat XYZ Drone)
+    └── /mavros/state  (Mendapatkan info Koneksi, Arming, Mode Terbang)
     │
     ▼
-[Loop Setiap 0.1 Detik (10 Hz)]
-    ├── 1. Cek Watchdog MAVROS Heartbeat (Aktif setelah autopilot terhubung pertama kali)
-    │     └── Jika state terhenti > 3.0 detik dan status ARMED (sedang terbang):
-    │           └── Kirim perintah darurat LAND.
-    │
-    ├── 2. Cek Watchdog Autopilot Connection
-    │     └── Jika koneksi terputus (connected: false) dan status ARMED (sedang terbang):
-    │           └── Kirim perintah darurat LAND.
-    │
-    ├── 3. Request Telemetry Stream Rate (Sekali saja saat pertama terhubung)
-    │     └── Kirim request 'set_stream_rate' (STREAM_ALL, 10Hz) ke Autopilot.
-    │
-    └── 4. Deteksi Override Mode LAND
-          └── Jika terdeteksi mode LAND (dari pilot manual/GCS):
-                └── Tandai misi selesai, hentikan pengiriman setpoint koordinat.
+[Menerima Data Telemetri]
+    ├── 1. Log Perubahan Koneksi Autopilot (Mencatat status saat tersambung / terputus)
+    ├── 2. Log Perubahan Status Arming (Mencatat status ARMED / DISARMED)
+    ├── 3. Log Perubahan Mode Terbang (Mencatat perubahan ke mode GUIDED, LAND, dll.)
+    └── 4. Request Telemetry Stream Rate (Sekali saja saat pertama terhubung, meminta data telemetri 10Hz)
 ```
 
-Seluruh status wahana (posisi, baterai, mode) disimpan secara dinamis di dalam variabel memori kelas `VtolCore` agar siap digunakan oleh logika kendali autonomous di masa mendatang tanpa perlu membebani terminal dengan pencetakan teks HUD.
+Variabel status (koneksi, arming, mode) dipantau secara langsung melalui callback event di dalam kelas `VtolCore` agar memudahkan pemantauan dasar tanpa membebani sistem dengan pemrosesan failsafe software yang berlebihan di tingkat pendamping (companion). Failsafe kritis diserahkan kepada konfigurasi firmware Flight Controller.
+
 
