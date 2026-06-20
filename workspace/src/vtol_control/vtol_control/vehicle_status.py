@@ -1,74 +1,15 @@
 import rclpy
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from mavros_msgs.msg import State
-from sensor_msgs.msg import BatteryState
-from geometry_msgs.msg import PoseStamped
+from vtol_control.vtol_base import VtolBaseNode
 
-class VehicleStatusPrinter(Node):
+class VehicleStatusPrinter(VtolBaseNode):
     def __init__(self):
         super().__init__('vehicle_status_printer')
-
-        # Define QoS Profiles to match MAVROS publishers
-        self.qos_telemetry = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10,
-            durability=DurabilityPolicy.VOLATILE
-        )
-        
-        self.qos_state = QoSProfile(
-            reliability=ReliabilityPolicy.RELIABLE,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL
-        )
-
-        # Telemetry State Variables
-        self.current_state = State()
-        self.current_pose = PoseStamped()
-        self.current_battery = BatteryState()
-        self.has_pose = False
-        self.has_battery = False
-
-        # Subscriptions
-        self.state_sub = self.create_subscription(
-            State,
-            '/mavros/state',
-            self.state_callback,
-            self.qos_state
-        )
-
-        self.pose_sub = self.create_subscription(
-            PoseStamped,
-            '/mavros/local_position/pose',
-            self.pose_callback,
-            self.qos_telemetry
-        )
-
-        self.battery_sub = self.create_subscription(
-            BatteryState,
-            '/mavros/battery',
-            self.battery_callback,
-            self.qos_telemetry
-        )
 
         # Print Timer (10 Hz)
         self.timer = self.create_timer(0.1, self.timer_callback)
 
         # Clear screen once at the beginning
         print("\033[2J\033[H", end="", flush=True)
-
-    def state_callback(self, msg):
-        self.current_state = msg
-
-    def pose_callback(self, msg):
-        self.current_pose = msg
-        self.has_pose = True
-
-    def battery_callback(self, msg):
-        self.current_battery = msg
-        self.has_battery = True
 
     def timer_callback(self):
         # Move cursor to top-left instead of full clear to prevent flickering

@@ -26,6 +26,8 @@ setup(
         'console_scripts': [
             'vtol_core = vtol_control.vtol_core:main',
             'vehicle_status = vtol_control.vehicle_status:main',
+            'test_arm = vtol_control.test_arm:main',
+            'menu_launcher = vtol_control.menu_launcher:main',
         ],
     },
 )

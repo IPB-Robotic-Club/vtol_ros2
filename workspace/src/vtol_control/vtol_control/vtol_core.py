@@ -1,69 +1,19 @@
 import rclpy
-from rclpy.node import Node
-from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from mavros_msgs.msg import State
-from mavros_msgs.srv import StreamRate, SetMode
-from sensor_msgs.msg import BatteryState
-from geometry_msgs.msg import PoseStamped
+from vtol_control.vtol_base import VtolBaseNode
+from mavros_msgs.srv import StreamRate
 import time
 
-class VtolCore(Node):
+class VtolCore(VtolBaseNode):
     def __init__(self):
         super().__init__('vtol_core')
 
-        # Define QoS Profiles
-        self.qos_telemetry = QoSProfile(
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=10,
-            durability=DurabilityPolicy.VOLATILE
-        )
-        
-        self.qos_state = QoSProfile(
-            reliability=ReliabilityPolicy.RELIABLE,
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL
-        )
-
-        # State subscriptions
-        self.state_sub = self.create_subscription(
-            State,
-            '/mavros/state',
-            self.state_callback,
-            self.qos_state
-        )
-
-        self.pose_sub = self.create_subscription(
-            PoseStamped,
-            '/mavros/local_position/pose',
-            self.pose_callback,
-            self.qos_telemetry
-        )
-
-        self.battery_sub = self.create_subscription(
-            BatteryState,
-            '/mavros/battery',
-            self.battery_callback,
-            self.qos_telemetry
-        )
-
-        # Timer for HUD and Failsafe Watchdog (10 Hz)
+        # Timer for Failsafe Watchdog (10 Hz)
         self.timer = self.create_timer(0.1, self.timer_callback)
 
-        # Service clients
+        # Service client for stream rate (not in base node)
         self.stream_rate_client = self.create_client(StreamRate, '/mavros/set_stream_rate')
-        self.set_mode_client = self.create_client(SetMode, '/mavros/set_mode')
 
-        # Telemetry State Variables
-        self.current_state = State()
-        self.current_pose = PoseStamped()
-        self.current_battery = BatteryState()
-        self.has_pose = False
-        self.has_battery = False
-        
-        # Failsafe and Watchdog Variables
-        self.last_state_time = 0.0  # Unix timestamp of last received MAVROS state message
+        # Watchdog and safety state variables
         self.stream_rate_requested = False
         self.mavros_heartbeat_ok = False
         self.autopilot_connected = False
@@ -74,12 +24,8 @@ class VtolCore(Node):
 
         self.get_logger().info('VTOL Core Node Started!')
 
-    def state_callback(self, msg):
-        self.current_state = msg
-        self.last_state_time = time.time()
+    def on_state(self, msg):
         self.mavros_heartbeat_ok = True
-
-        # Check connection status
         self.autopilot_connected = msg.connected
 
         # Detect GCS or Pilot manual override to LAND mode
@@ -87,14 +33,6 @@ class VtolCore(Node):
             self.mission_completed = True
             self.pilot_override_active = True
             self.get_logger().info("GCS/Pilot manual override to LAND mode detected. Mission completed.")
-
-    def pose_callback(self, msg):
-        self.current_pose = msg
-        self.has_pose = True
-
-    def battery_callback(self, msg):
-        self.current_battery = msg
-        self.has_battery = True
 
     def request_stream_rate(self):
         if self.stream_rate_client.wait_for_service(timeout_sec=0.5):
@@ -109,12 +47,7 @@ class VtolCore(Node):
     def trigger_failsafe_land(self):
         """Attempts to command LAND mode as a critical safety failsafe."""
         self.get_logger().error("FAILSAFE TRIGGERED: Ordering immediate LAND!")
-        if self.set_mode_client.wait_for_service(timeout_sec=0.5):
-            req = SetMode.Request()
-            req.custom_mode = "LAND"
-            self.set_mode_client.call_async(req)
-        else:
-            self.get_logger().error("Failsafe LAND service call failed: SetMode service not available.")
+        self.change_mode("LAND")
 
     def timer_callback(self):
         current_time = time.time()
