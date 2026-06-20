@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
 from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition
 from ament_index_python.packages import get_package_share_directory
@@ -38,8 +38,14 @@ def generate_launch_description():
         except Exception as e:
             print(f"Warning: Failed to read config file {config_file_path}: {e}. Falling back to default URL.")
 
+    # Path to FastDDS configuration file to prevent WSL2 shared memory communication lockups
+    src_fastdds_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', 'vtol_control', 'config', 'fastdds.xml'))
+    installed_fastdds_path = os.path.join(package_share_dir, 'config', 'fastdds.xml')
+    fastdds_path = src_fastdds_path if os.path.exists(src_fastdds_path) else installed_fastdds_path
+
     print(f"======================================================")
     print(f" VTOL Core Launching with FCU URL: {fcu_url}")
+    print(f" FastDDS Configuration File: {fastdds_path}")
     print(f"======================================================")
 
     # Declare Launch Argument for HUD visualization
@@ -50,14 +56,12 @@ def generate_launch_description():
     )
     show_hud = LaunchConfiguration('show_hud')
 
-    # Launch MAVROS node - output redirected to log to prevent polluting the terminal output
-    # Log level is set to FATAL to suppress warning/info noise from MAVROS in the console
+    # Launch MAVROS node - output to screen with default INFO log level to diagnose connection problems
     mavros_node = Node(
         package='mavros',
         executable='mavros_node',
         namespace='mavros',
-        output='log',
-        arguments=['--ros-args', '--log-level', 'FATAL'],
+        output='screen',
         parameters=[{
             'fcu_url': fcu_url,
             'system_id': 255,
@@ -82,6 +86,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        SetEnvironmentVariable('FASTRTPS_DEFAULT_PROFILES_FILE', fastdds_path),
+        SetEnvironmentVariable('ROS_AUTOMATIC_DISCOVERY_RANGE', 'LOCALHOST'),
         show_hud_arg,
         mavros_node,
         vtol_core_node,

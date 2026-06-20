@@ -4,40 +4,32 @@ Dokumen ini berisi rangkuman seluruh perintah penting untuk mengelola, menjalank
 
 ---
 
-## 1. Menghentikan (*Kill*) Node ROS 2 & MAVROS
+## 1. Menghentikan (*Kill*) & Memeriksa Node ROS 2 / MAVROS
 
-Karena ROS 2 berjalan sebagai proses Linux biasa di latar belakang kontainer, Anda dapat menghentikannya secara paksa menggunakan perintah terminal berikut:
+Karena ROS 2 dan MAVROS berjalan sebagai proses latar belakang di dalam kontainer Docker, proses tersebut kadang-kadang tidak tertutup dengan bersih saat terminal dihentikan. Gunakan perintah berikut untuk menghentikan dan memeriksa sisa proses yang menggantung:
 
-### A. Menghentikan Menggunakan Nama Proses (Direkomendasikan)
-Gunakan perintah `pkill` dengan opsi pencocokan pola nama `-f` untuk menghentikan node tertentu:
+### A. Menghentikan Semua Proses Sekaligus (Direkomendasikan)
+Untuk mematikan seluruh proses node watchdog (`vtol_core`), status HUD (`vehicle_status`), tester (`test_arm`/`mission_hover`), serta wrapper MAVROS sekaligus:
+```bash
+pkill -f -9 "vtol|mavros|ros2"
+```
+> [!NOTE]
+> Perintah `pkill -f -9 ros2` saja **tidak cukup** untuk mematikan MAVROS atau `vtol_core`, karena biner eksekusi asli mereka berjalan tanpa memuat substring kata `"ros2"` pada argumen baris perintahnya.
 
-*   **Menghentikan MAVROS:**
-    ```bash
-    pkill -f -9 mavros_node
-    ```
-*   **Menghentikan VTOL Core Node:**
-    ```bash
-    pkill -f -9 vtol_core
-    ```
-*   **Menghentikan HUD/Vehicle Status:**
-    ```bash
-    pkill -f -9 vehicle_status
-    ```
-*   **Menghentikan Semua Proses ROS 2 Sekaligus:**
-    ```bash
-    pkill -f -9 ros2
-    ```
+### B. Memeriksa Sisa Proses yang Aktif
+Untuk memastikan tidak ada proses duplikat atau sisa proses yang menggantung:
+```bash
+ps aux | grep -E "vtol|mavros|ros2"
+```
+Jika bersih, output perintah di atas hanya akan menampilkan baris pencarian `grep` itu sendiri.
 
-### B. Menghentikan Secara Manual Menggunakan PID (Process ID)
-Jika Anda ingin melihat dan membunuh proses secara spesifik:
-1.  Cari PID dari proses ROS 2 yang sedang berjalan:
-    ```bash
-    ps aux | grep -E "mavros|vtol|ros2"
-    ```
-2.  Bunuh proses tersebut menggunakan PID-nya (misal PID-nya adalah `1234`):
-    ```bash
-    kill -9 1234
-    ```
+### C. Menghentikan Secara Manual Menggunakan PID (Process ID)
+Jika Anda ingin membunuh proses tertentu secara spesifik:
+1. Jalankan perintah pemeriksaan di atas untuk menemukan nomor PID-nya (kolom kedua).
+2. Bunuh proses menggunakan PID-nya (misal PID-nya adalah `1234`):
+   ```bash
+   kill -9 1234
+   ```
 
 ---
 
@@ -119,3 +111,26 @@ Gunakan perintah-perintah ini untuk memeriksa kesehatan dan komunikasi data dron
     ```bash
     ros2 topic echo /mavros/battery
     ```
+
+---
+
+## 5. Troubleshooting: Jika MAVROS Stuck / Menunggu Lama
+
+Jika node watchdog terus-menerus mencetak `Waiting for MAVROS state messages...` lebih dari 45 detik, ada dua kemungkinan penyebab utama:
+
+### Opsi A: Simulator SITL di Host Windows Membeku (*Freeze*)
+SITL ArduPilot di Windows kadang-kadang berhenti mengirimkan data (misal setelah laptop masuk mode sleep). 
+*   **Solusi**: Tutup konsol SITL ArduPilot di Windows Anda, lalu jalankan kembali simulator SITL tersebut.
+
+### Opsi B: Gangguan DDS Shared Memory di WSL2 (DDS Lockup)
+Proses ROS 2 yang dimatikan paksa berulang kali dapat merusak segmen memori bersama (*shared memory*) pada WSL2, sehingga komunikasi antar-node tersumbat.
+*   **Solusi**:
+    1. Bersihkan seluruh proses ROS 2 dan MAVROS yang menggantung di kontainer:
+       ```bash
+       pkill -f -9 "vtol|mavros|ros2"
+       ```
+    2. Aktifkan konfigurasi FastDDS bypass shared memory (memaksa memakai UDP loopback) dengan mengekspor variabel lingkungan berikut sebelum menjalankan launch file:
+       ```bash
+       export FASTRTPS_DEFAULT_PROFILES_FILE=/home/pilot/workspace/fastdds.xml
+       ```
+    3. Jalankan kembali launch file seperti biasa. Konfigurasi `fastdds.xml` ini akan menjamin jalur komunikasi DDS selalu bersih dan bebas dari *infinite spin-lock*!

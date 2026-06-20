@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import Shutdown
+from launch.actions import Shutdown, SetEnvironmentVariable
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -34,8 +34,14 @@ def generate_launch_description():
         except Exception as e:
             print(f"Warning: Failed to read config file {config_file_path}: {e}. Falling back to default URL.")
 
+    # Path to FastDDS configuration file to prevent WSL2 shared memory communication lockups
+    src_fastdds_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', 'vtol_control', 'config', 'fastdds.xml'))
+    installed_fastdds_path = os.path.join(package_share_dir, 'config', 'fastdds.xml')
+    fastdds_path = src_fastdds_path if os.path.exists(src_fastdds_path) else installed_fastdds_path
+
     print(f"======================================================")
     print(f" VTOL Autonomous Arming Test Launching with FCU: {fcu_url}")
+    print(f" FastDDS Configuration File: {fastdds_path}")
     print(f"======================================================")
 
     # Launch MAVROS node - output redirected to log
@@ -76,6 +82,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        SetEnvironmentVariable('FASTRTPS_DEFAULT_PROFILES_FILE', fastdds_path),
+        SetEnvironmentVariable('ROS_AUTOMATIC_DISCOVERY_RANGE', 'LOCALHOST'),
         mavros_node,
         vtol_core_node,
         vehicle_status_node,

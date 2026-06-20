@@ -1,12 +1,12 @@
-# Panduan Konfigurasi & Mekanisme Failsafe Robust (`vtol_control`)
+# Panduan Konfigurasi & Mekanisme Failsafe (`vtol_control`)
 
-Dokumen ini menjelaskan arsitektur baru sistem pemantauan dan pengaman (*failsafe*) core pada package `vtol_control`.
+Dokumen ini menjelaskan arsitektur sistem pemantauan dan pengelolaan koneksi pada package `vtol_control`.
 
 ---
 
 ## 1. Manajemen Konfigurasi Koneksi (`fcu_url.txt`)
 
-Untuk mempermudah perpindahan antara koneksi **Simulasi (TCP)** dan **Drone Fisik (Serial)** tanpa perlu mengganti perintah di terminal, MAVROS kini membaca konfigurasi dari sebuah file text.
+Untuk mempermudah perpindahan antara koneksi **Simulasi (TCP)** dan **Drone Fisik (Serial)** tanpa perlu mengganti perintah di terminal, MAVROS membaca konfigurasi dari sebuah file text.
 
 *   **Lokasi File Config:** **[fcu_url.txt](file:///wsl.localhost/Ubuntu-24.04/home/qois51/vtol-dev/workspace/src/vtol_control/config/fcu_url.txt)**
 *   **Cara Penggunaan:** Cukup edit file tersebut dan pilih baris yang ingin diaktifkan (hilangkan tanda `#` pada baris tersebut).
@@ -16,39 +16,22 @@ Untuk mempermudah perpindahan antara koneksi **Simulasi (TCP)** dan **Drone Fisi
 
 ---
 
-## 2. Mekanisme Failsafe Core (`vtol_core.py`)
+## 2. Pemantau Status Core (`vtol_core.py`)
 
-Seluruh logika pengaman (*failsafe*) dan jembatan pemantau telemetri kini disatukan secara permanen di dalam satu file inti: **[vtol_core.py](file:///wsl.localhost/Ubuntu-24.04/home/qois51/vtol-dev/workspace/src/vtol_control/vtol_control/vtol_core.py)**. 
+Node **[vtol_core.py](file:///wsl.localhost/Ubuntu-24.04/home/qois51/vtol-dev/workspace/src/vtol_control/vtol_control/vtol_core.py)** berfungsi sebagai *core monitor* telemetri. Node ini disederhanakan agar berjalan secara ringan:
 
-Program ini memantau dua tingkat kegagalan koneksi secara otomatis pada frekuensi **10 Hz**:
+*   **Mencatat Koneksi Autopilot:** Menampilkan informasi ketika koneksi serial/TCP MAVLink berhasil terhubung atau terputus.
+*   **Mencatat Perubahan Mode Terbang:** Memantau dan mencetak perubahan mode (misal dari `STABILIZE` ke `GUIDED` atau `LAND`).
+*   **Mencatat Status Arming:** Melaporkan status arming drone (ARMED / DISARMED).
+*   **Request Stream Rate:** Mengirim request ke autopilot untuk memulai publikasi telemetri (misal sensor GPS, posisi lokal, status baterai) pada kecepatan 10Hz.
 
-### A. Failsafe 1: MAVROS Heartbeat Watchdog (Komputer Pendamping Mati/Hang)
-*   **Masalah:** Program MAVROS mati, hang, atau tidak merespons di komputer pendamping (Raspberry Pi/WSL).
-*   **Cara Kerja:** Node `vtol_core` mencatat waktu kedatangan pesan `/mavros/state` terakhir. **Pemeriksaan ini baru aktif setelah koneksi pertama dengan autopilot terjalin** (`connection_established = True`) untuk menghindari alarm palsu saat proses inisialisasi awal MAVROS yang lambat. Jika waktu jeda sejak pesan terakhir melebihi **3,0 detik**:
-    *   Sistem mencatat status kehilangan heartbeat MAVROS secara internal.
-    *   **Jika Drone sedang armed (terbang):** Node akan langsung mengirimkan perintah darurat **`LAND`** secara asinkron ke autopilot.
-
-### B. Failsafe 2: Autopilot Connection Watchdog (Kabel Data Terputus/Jalur Serial Mati)
-*   **Masalah:** MAVROS tetap hidup, namun hubungan komunikasi MAVLink antara MAVROS dengan Pixhawk terputus di tengah penerbangan (kabel USB/Serial longgar atau copot).
-*   **Cara Kerja:** Node mendeteksi jika parameter `connected` pada topik `/mavros/state` berubah menjadi `False` saat status drone masih **Armed** (sedang terbang).
-    *   Node mencatat status kegagalan koneksi ke autopilot secara internal dan memicu log error.
-    *   Node langsung mengeksekusi service panggilan darurat **`LAND`** ke Pixhawk untuk segera mendaratkan drone di tempat demi keamanan.
+> [!IMPORTANT]
+> **Failsafe & Proteksi Keselamatan:**
+> Node `vtol_core` ini tidak lagi melakukan intervensi perintah secara aktif (seperti mengirimkan perintah `LAND` otomatis via software watchdog). Disarankan untuk selalu mengonfigurasi failsafe bawaan pada firmware autopilot (seperti *GCS Connection Failsafe*, *Radio Failsafe*, atau *Battery Failsafe* pada ArduPilot/PX4) agar penanganan darurat dapat dieksekusi secara instan dan aman langsung dari Flight Controller.
 
 ---
 
-## 3. Deteksi Override Pilot (LAND Mode Signal)
-
-Salah satu kendala dalam kendali otomatis adalah ketika pilot manusia ingin mengambil alih drone di tengah misi otomatis dengan mengganti mode terbang menjadi **`LAND`** (baik melalui switch remote control maupun Mission Planner GCS).
-
-*   **Masalah Lama:** Program autonomous luar terkadang tetap mengirimkan koordinat target terbang (setpoint) meskipun pilot telah memindahkan mode ke `LAND`, menyebabkan drone bergetar atau menolak mendarat karena bertabrakan perintah.
-*   **Solusi Baru di `vtol_core`:**
-    *   Node `vtol_core` secara aktif memantau perubahan mode penerbangan drone.
-    *   Jika terdeteksi mode terbang berubah menjadi **`LAND`** (baik diperintahkan oleh program sendiri, oleh GCS, atau oleh switch remote control pilot), node akan mengaktifkan bendera keselamatan `self.pilot_override_active = True` dan `self.mission_completed = True`.
-    *   Sinyal ini menandakan kepada seluruh sistem kontrol autonomous luar bahwa **misi telah selesai / dibatalkan**, dan pengiriman setpoint koordinat harus segera dihentikan total agar proses pendaratan berjalan mulus tanpa intervensi data luar.
-
----
-
-## 4. Cara Menjalankan Program (Execution Modes)
+## 3. Cara Menjalankan Program (Execution Modes)
 
 Setelah melakukan perubahan alamat koneksi di `fcu_url.txt`, lakukan kompilasi workspace terlebih dahulu di terminal kontainer Docker:
 ```bash
@@ -76,5 +59,3 @@ Jika Anda menggunakan Opsi A (menjalankan core secara senyap), Anda dapat sewakt
 ros2 run vtol_control vehicle_status
 ```
 *Gunakan `Ctrl+C` untuk menutup viewer HUD kapan saja secara aman tanpa mengganggu sistem pengaman utama.*
-
-
