@@ -1,5 +1,8 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch.conditions import IfCondition
 from ament_index_python.packages import get_package_share_directory
 import os
 
@@ -17,7 +20,7 @@ def generate_launch_description():
         print(f"Loading FCU URL from source config: {config_file_path}")
     else:
         config_file_path = installed_config_path
-        print(f"Loading FCU URL from installed config: {config_file_path}")
+        print(f"Loading FCU URL from installed config: {installed_config_path}")
 
     # Default fallback
     fcu_url = 'tcp://127.0.0.1:5762'
@@ -39,6 +42,14 @@ def generate_launch_description():
     print(f" VTOL Core Launching with FCU URL: {fcu_url}")
     print(f"======================================================")
 
+    # Declare Launch Argument for HUD visualization
+    show_hud_arg = DeclareLaunchArgument(
+        'show_hud',
+        default_value='false',
+        description='Whether to launch the vehicle status HUD printer node'
+    )
+    show_hud = LaunchConfiguration('show_hud')
+
     # Launch MAVROS node - output redirected to log to prevent polluting the terminal output
     # Log level is set to FATAL to suppress warning/info noise from MAVROS in the console
     mavros_node = Node(
@@ -57,10 +68,21 @@ def generate_launch_description():
         package='vtol_control',
         executable='vtol_core',
         name='vtol_core_node',
-        output='screen'
+        output='log'  # Redirect logs to file to keep console clean for HUD if shown
+    )
+
+    # Launch the vehicle status HUD printer conditionally
+    vehicle_status_node = Node(
+        package='vtol_control',
+        executable='vehicle_status',
+        name='vehicle_status_printer',
+        output='screen',
+        condition=IfCondition(show_hud)
     )
 
     return LaunchDescription([
+        show_hud_arg,
         mavros_node,
-        vtol_core_node
+        vtol_core_node,
+        vehicle_status_node
     ])

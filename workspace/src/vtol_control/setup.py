@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'vtol_core = vtol_control.vtol_core:main',
+            'vehicle_status = vtol_control.vehicle_status:main',
         ],
     },
 )
