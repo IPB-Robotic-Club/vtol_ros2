@@ -1,0 +1,8 @@
+# Konfigurasi FCU URL MAVLink
+# Hilangkan tanda '#' pada baris yang ingin digunakan, dan beri tanda '#' pada baris lainnya.
+
+# 1. Mode TCP (Simulasi SITL ArduPilot/Mission Planner)
+tcp://127.0.0.1:5762
+
+# 2. Mode Serial (Koneksi Fisik ke Pixhawk via USB / Raspberry Pi)
+# /dev/ttyACM0:921600
