@@ -29,6 +29,7 @@ setup(
             'test_arm = vtol_control.test_arm:main',
             'menu_launcher = vtol_control.menu_launcher:main',
             'mission_hover = vtol_control.mission_hover:main',
+            'mission_maneuver = vtol_control.mission_maneuver:main',
         ],
     },
 )

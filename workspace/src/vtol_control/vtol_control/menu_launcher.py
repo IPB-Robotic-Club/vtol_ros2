@@ -9,14 +9,15 @@ def print_menu():
     print(" 1. Tampilkan HUD Status Drone (vehicle_status)")
     print(" 2. Jalankan Uji Coba Arming (test_arm)")
     print(" 3. Jalankan Misi Hover (mission_hover)")
-    print(" 4. Keluar")
+    print(" 4. Jalankan Misi Maneuver (mission_maneuver)")
+    print(" 5. Keluar")
     print("="*42)
 
 def main():
     while True:
         print_menu()
         try:
-            choice = input("Pilih opsi (1-4): ").strip()
+            choice = input("Pilih opsi (1-5): ").strip()
         except KeyboardInterrupt:
             print("\nExiting...")
             break
@@ -46,10 +47,18 @@ def main():
             except KeyboardInterrupt:
                 pass
         elif choice == '4':
+            print("\nMeluncurkan Misi Maneuver...\n")
+            time.sleep(1.0)
+            try:
+                # Run the ROS2 maneuver mission
+                subprocess.run(["ros2", "run", "vtol_control", "mission_maneuver"])
+            except KeyboardInterrupt:
+                pass
+        elif choice == '5':
             print("\nKeluar dari menu launcher.")
             break
         else:
-            print("\nPilihan tidak valid. Silakan masukkan angka 1-4.")
+            print("\nPilihan tidak valid. Silakan masukkan angka 1-5.")
 
 if __name__ == '__main__':
     main()
