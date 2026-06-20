@@ -36,11 +36,11 @@ Mengontrol drone seberat beberapa kilogram dengan baling-baling berputar tinggi 
 ### A. Failsafe Kehilangan Koneksi Kontrol (Setpoint Timeout Failsafe)
 * **Aturan Utama MAVROS**: Autopilot membutuhkan aliran perintah target (*setpoint*) secara terus-menerus.
 * **Cara Kerja**: Sebelum beralih ke mode kontrol autonomous (`GUIDED` / `OFFBOARD`), program ROS 2 **harus mengirimkan setpoint terlebih dahulu** dengan frekuensi minimal 2 Hz (direkomendasikan **20 Hz**).
-* **Failsafe**: Jika program ROS 2 Anda mengalami *crash*, hang, atau kabel data terputus selama $\ge 0.5$ detik saat drone terbang autonomous, autopilot akan mendeteksi *Setpoint Timeout*. Autopilot secara otomatis akan mengambil alih kendali dan mengganti mode penerbangan menjadi **`QLOITER`** (hover diam di tempat) atau **`RTL`** (kembali ke titik awal lepas landas secara otomatis) untuk mencegah drone terbang tanpa kendali (*flyaway*).
+* **Failsafe**: Jika program ROS 2 Anda mengalami *crash*, hang, atau kabel data terputus selama $\ge 0.5$ detik saat drone terbang autonomous, autopilot akan mendeteksi *Setpoint Timeout*. Autopilot secara otomatis akan mengambil alih kendali dan mengganti mode penerbangan menjadi **`LAND`** (mendarat di tempat secara otomatis) atau **`RTL`** (kembali ke titik awal lepas landas secara otomatis) untuk mencegah drone terbang tanpa kendali (*flyaway*).
 
 ### B. Hak Pengambilalihan Kendali Manual (RC Override / GCS Kill Switch)
 * **Prioritas Utama**: Pilot manusia (dengan Remote Control fisik) memegang prioritas kendali tertinggi di atas program autonomous ROS 2.
-* **RC Override**: Jika terjadi kegagalan logika pada program Python Anda (misal drone terbang ke arah yang salah), pilot fisik cukup mengubah switch mode pada RC (misal dari mode `GUIDED` ke mode manual `ALT_HOLD` atau `QLOITER`). Pindahnya switch fisik ini akan langsung mematikan kendali autonomous ROS 2 seketika itu juga.
+* **RC Override**: Jika terjadi kegagalan logika pada program Python Anda (misal drone terbang ke arah yang salah), pilot fisik cukup mengubah switch mode pada RC (misal dari mode `GUIDED` ke mode manual `ALT_HOLD` atau `LAND`). Pindahnya switch fisik ini akan langsung mematikan kendali autonomous ROS 2 seketika itu juga.
 * **GCS Override**: Di Mission Planner simulasi, Anda dapat mengklik tombol **`LAND`** atau **`RTL`** kapan saja untuk membatalkan kontrol ROS 2.
 
 ### C. Failsafe Geofence & Batas Ketinggian
