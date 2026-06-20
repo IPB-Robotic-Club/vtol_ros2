@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
-from mavros_msgs.msg import State
+from mavros_msgs.msg import State, OverrideRCIn
 from mavros_msgs.srv import SetMode, CommandBool
 from sensor_msgs.msg import BatteryState
 from geometry_msgs.msg import PoseStamped
@@ -35,6 +35,9 @@ class VtolBaseNode(Node):
         self.state_received = False
         self.last_state_time = 0.0
 
+        # Buffer for RC channels: 18 channels, default 0 (no override)
+        self.rc_channels = [0] * 18
+
         # Subscriptions
         self.state_sub = self.create_subscription(
             State,
@@ -60,6 +63,9 @@ class VtolBaseNode(Node):
         # Service clients
         self.set_mode_client = self.create_client(SetMode, '/mavros/set_mode')
         self.arming_client = self.create_client(CommandBool, '/mavros/cmd/arming')
+
+        # Publisher for MAVROS RC overrides
+        self.rc_pub = self.create_publisher(OverrideRCIn, '/mavros/rc/override', 10)
 
     def _state_callback(self, msg):
         self.current_state = msg
@@ -107,3 +113,8 @@ class VtolBaseNode(Node):
         else:
             self.get_logger().error(f"Arming service not available for value: {arm_value}")
             return False
+
+    def publish_rc(self):
+        msg = OverrideRCIn()
+        msg.channels = self.rc_channels
+        self.rc_pub.publish(msg)

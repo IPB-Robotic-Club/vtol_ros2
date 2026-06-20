@@ -19,7 +19,7 @@ class VtolCore(VtolBaseNode):
             StatusText,
             '/mavros/statustext/recv',
             self.statustext_callback,
-            10
+            self.qos_telemetry
         )
 
         # Watchdog and safety state variables
@@ -80,16 +80,16 @@ class VtolCore(VtolBaseNode):
         if self.current_state.armed:
             if self.last_state_time > 0.0:
                 time_since_last_state = current_time - self.last_state_time
-                if time_since_last_state > 3.0:
+                if time_since_last_state > 8.0:
                     if self.mavros_heartbeat_ok:
-                        self.get_logger().error("Watchdog: MAVROS Heartbeat Lost during flight! (No state messages)")
+                        self.get_logger().error("Watchdog: MAVROS Heartbeat Lost during flight! (No state messages for 8 seconds)")
                     self.mavros_heartbeat_ok = False
                     self.trigger_failsafe_land()
         else:
             # If not armed, keep resetting the watchdog health state silently
             if self.last_state_time > 0.0:
                 time_since_last_state = current_time - self.last_state_time
-                self.mavros_heartbeat_ok = (time_since_last_state <= 3.0)
+                self.mavros_heartbeat_ok = (time_since_last_state <= 8.0)
             else:
                 self.mavros_heartbeat_ok = False
 

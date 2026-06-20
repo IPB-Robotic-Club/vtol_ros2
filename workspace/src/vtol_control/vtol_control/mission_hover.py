@@ -1,17 +1,11 @@
 import rclpy
+from rclpy.signals import SignalHandlerOptions
 from vtol_control.vtol_base import VtolBaseNode
-from mavros_msgs.msg import OverrideRCIn
 import time
 
 class MissionHoverNode(VtolBaseNode):
     def __init__(self):
         super().__init__('mission_hover_node')
-
-        # Publisher for MAVROS RC overrides
-        self.rc_pub = self.create_publisher(OverrideRCIn, '/mavros/rc/override', 10)
-
-        # Buffer for RC channels: 18 channels, default 0 (no override)
-        self.rc_channels = [0] * 18
 
         # Background RC publisher timer (10 Hz)
         self.rc_timer = self.create_timer(0.1, self.publish_rc)
@@ -34,12 +28,6 @@ class MissionHoverNode(VtolBaseNode):
             if msg.mode not in ['LOITER', 'CMODE(5)']:
                 self.get_logger().warn(f"Manual override detected! Flight mode changed to {msg.mode}. Aborting mission.")
                 self.abort_mission()
-
-    def publish_rc(self):
-        # Continuously publish the current channel overrides to MAVROS
-        msg = OverrideRCIn()
-        msg.channels = self.rc_channels
-        self.rc_pub.publish(msg)
 
     def control_loop(self):
         if self.safety_aborted:
@@ -103,7 +91,7 @@ class MissionHoverNode(VtolBaseNode):
 
         elif self.phase == 'HOVER':
             elapsed = current_time - self.phase_start_time
-            if elapsed >= 10.0:
+            if elapsed >= 5.0:
                 self.get_logger().info("Hover complete (5.0s). Switching mode to LAND for graceful landing...")
                 # Change mode to LAND to descend gracefully
                 self.change_mode("LAND")
@@ -155,12 +143,23 @@ class MissionHoverNode(VtolBaseNode):
         super().destroy_node()
 
 def main(args=None):
-    rclpy.init(args=args)
+    rclpy.init(args=args, signal_handler_options=SignalHandlerOptions.NO)
     node = MissionHoverNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        node.get_logger().warn("KeyboardInterrupt detected! Performing safety landing sequence...")
+        if node.state_received and node.current_state.armed:
+            node.change_mode("LAND")
+            node.rc_channels = [0] * 18
+            try:
+                node.publish_rc()
+            except Exception as e:
+                node.get_logger().warn(f"Failed to publish safety RC release: {e}")
+            # Spin briefly to allow the async mode change service call to be processed
+            start_time = time.time()
+            while rclpy.ok() and time.time() - start_time < 1.5:
+                rclpy.spin_once(node, timeout_sec=0.1)
     finally:
         node.destroy_node()
         if rclpy.ok():
