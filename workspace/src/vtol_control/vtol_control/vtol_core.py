@@ -1,6 +1,7 @@
 import rclpy
 from vtol_control.vtol_base import VtolBaseNode
 from mavros_msgs.srv import StreamRate
+from mavros_msgs.msg import StatusText
 import time
 
 class VtolCore(VtolBaseNode):
@@ -12,6 +13,14 @@ class VtolCore(VtolBaseNode):
 
         # Service client for stream rate (not in base node)
         self.stream_rate_client = self.create_client(StreamRate, '/mavros/set_stream_rate')
+
+        # Subscribe to MAVROS statustext to print autopilot messages in real-time
+        self.statustext_sub = self.create_subscription(
+            StatusText,
+            '/mavros/statustext/recv',
+            self.statustext_callback,
+            10
+        )
 
         # Watchdog and safety state variables
         self.stream_rate_requested = False
@@ -26,10 +35,18 @@ class VtolCore(VtolBaseNode):
 
     def on_state(self, msg):
         self.mavros_heartbeat_ok = True
+
+        # Log connection status changes to keep the console informed
+        if msg.connected != self.autopilot_connected:
+            if msg.connected:
+                self.get_logger().info("Autopilot Link Connected successfully!")
+            else:
+                self.get_logger().warn("Autopilot Link Connection lost!")
+
         self.autopilot_connected = msg.connected
 
         # Detect GCS or Pilot manual override to LAND mode
-        if msg.mode == "LAND" and not self.mission_completed:
+        if msg.mode in ["LAND", "CMODE(9)"] and not self.mission_completed:
             self.mission_completed = True
             self.pilot_override_active = True
             self.get_logger().info("GCS/Pilot manual override to LAND mode detected. Mission completed.")
@@ -51,6 +68,12 @@ class VtolCore(VtolBaseNode):
 
     def timer_callback(self):
         current_time = time.time()
+
+        # Provide console feedback during startup connection phase
+        if not self.state_received:
+            self.get_logger().info("Waiting for MAVROS state messages (check if MAVROS node is running)...", throttle_duration_sec=3.0)
+        elif not self.autopilot_connected:
+            self.get_logger().info("MAVROS node is active. Waiting for autopilot link connection (check if SITL is running and fcu_url is correct)...", throttle_duration_sec=3.0)
 
         # 1. Watchdog: Check MAVROS Node Health (Heartbeat)
         # Only check and trigger failsafe if the drone is armed (flying)
@@ -80,6 +103,15 @@ class VtolCore(VtolBaseNode):
         # 3. Request telemetry stream rates once connected
         if self.autopilot_connected and not self.stream_rate_requested:
             self.request_stream_rate()
+
+    def statustext_callback(self, msg):
+        # Forward autopilot status and alert messages to the screen
+        if msg.severity <= 3: # EMERGENCY, ALERT, CRITICAL, ERROR
+            self.get_logger().error(f"[Autopilot Alert]: {msg.text}")
+        elif msg.severity == 4: # WARNING
+            self.get_logger().warn(f"[Autopilot Warning]: {msg.text}")
+        else: # NOTICE, INFO, DEBUG
+            self.get_logger().info(f"[Autopilot Status]: {msg.text}")
 
 def main(args=None):
     rclpy.init(args=args)

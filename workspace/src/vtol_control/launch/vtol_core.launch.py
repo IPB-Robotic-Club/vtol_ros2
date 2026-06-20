@@ -60,6 +60,7 @@ def generate_launch_description():
         arguments=['--ros-args', '--log-level', 'FATAL'],
         parameters=[{
             'fcu_url': fcu_url,
+            'system_id': 255,
         }]
     )
 
@@ -68,7 +69,7 @@ def generate_launch_description():
         package='vtol_control',
         executable='vtol_core',
         name='vtol_core_node',
-        output='log'  # Redirect logs to file to keep console clean for HUD if shown
+        output='screen'  # Print logs directly to console for visibility
     )
 
     # Launch the vehicle status HUD printer conditionally
