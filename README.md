@@ -76,6 +76,9 @@ Gunakan urutan perintah berikut saat ingin mulai bekerja sehari-hari:
 
 ## 3. Koneksi dengan Autopilot SITL & Mission Planner
 
+> [!TIP]
+> **Setup SITL Simulator:** Jika Anda belum memasang simulator SITL di PC/Host Anda, ikuti panduan instalasi dan konfigurasinya pada **[Panduan Setup SITL untuk Uji Coba](docs/setup_sitl.md)**.
+
 Untuk menguji simulasi terbang drone VTOL secara autonomous, hubungkan ROS2 di dalam Docker dengan simulator internal di **Mission Planner** (Windows Host):
 
 ```

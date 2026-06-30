@@ -10,33 +10,22 @@ def generate_launch_description():
     # Retrieve the configuration path for the MAVLink interface
     package_share_dir = get_package_share_directory('vtol_control')
     
-    # Try to find the source directory config file first (so user changes in src/ apply instantly without colcon build)
-    # package_share_dir: workspace/install/vtol_control/share/vtol_control
-    src_config_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', 'vtol_control', 'config', 'fcu_url.txt'))
-    installed_config_path = os.path.join(package_share_dir, 'config', 'fcu_url.txt')
-    
-    if os.path.exists(src_config_path):
-        config_file_path = src_config_path
-        print(f"Loading FCU URL from source config: {config_file_path}")
-    else:
-        config_file_path = installed_config_path
-        print(f"Loading FCU URL from installed config: {installed_config_path}")
-
-    # Default fallback
-    fcu_url = 'tcp://127.0.0.1:5762'
-
-    # Read fcu_url from the config file if it exists
-    if os.path.exists(config_file_path):
+    # Import and read fcu_url using config_reader
+    try:
+        from vtol_control.config_reader import get_fcu_url
+        fcu_url = get_fcu_url()
+    except ImportError:
+        import sys
+        # Fallback: add source directory to sys.path if not sourced
+        src_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', 'vtol_control'))
+        if src_path not in sys.path:
+            sys.path.append(src_path)
         try:
-            with open(config_file_path, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    # Skip empty or commented lines
-                    if line and not line.startswith('#'):
-                        fcu_url = line
-                        break
+            from vtol_control.config_reader import get_fcu_url
+            fcu_url = get_fcu_url()
         except Exception as e:
-            print(f"Warning: Failed to read config file {config_file_path}: {e}. Falling back to default URL.")
+            print(f"Warning: Failed to import config_reader: {e}. Using default URL.")
+            fcu_url = 'tcp://127.0.0.1:5762'
 
     # Path to FastDDS configuration file to prevent WSL2 shared memory communication lockups
     src_fastdds_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', 'vtol_control', 'config', 'fastdds.xml'))

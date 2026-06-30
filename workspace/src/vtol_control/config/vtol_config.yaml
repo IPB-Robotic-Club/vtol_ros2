@@ -1,0 +1,14 @@
+# Konfigurasi Koneksi Autopilot VTOL
+# Pilih profil aktif yang ingin digunakan untuk koneksi MAVROS (ArduPilot/PX4)
+
+# Profil yang tersedia:
+# - tcp: Simulasi SITL ArduPilot / Mission Planner (default port: 5762)
+# - serial: Koneksi fisik Pixhawk ke Companion Computer (Raspberry Pi) via USB/Serial (default: /dev/ttyACM0 pada baudrate 921600)
+
+active_profile: "tcp"
+
+profiles:
+  tcp:
+    fcu_url: "tcp://127.0.0.1:5762"
+  serial:
+    fcu_url: "/dev/ttyACM0:921600"
