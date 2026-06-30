@@ -13,10 +13,3 @@ profiles:
   serial:
     fcu_url: "/dev/ttyACM0:921600"
 
-# Konfigurasi Penerima Kamera UDP & Deteksi ArUco
-camera:
-  udp_ip: "127.0.0.1"
-  udp_port: 5005
-  aruco_dict: "DICT_4X4_50"  # Pilihan: DICT_4X4_50, DICT_5X5_50, DICT_6X6_50, dll.
-  show_gui: false             # Set ke true untuk menampilkan visualisasi jendela GUI (cv2.imshow) secara langsung
-

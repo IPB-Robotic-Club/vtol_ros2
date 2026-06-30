@@ -7,7 +7,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
-from vtol_control.config_reader import get_camera_config
+from vtol_vision.config_reader import get_camera_config
 
 class ArucoReceiverNode(Node):
     def __init__(self):
