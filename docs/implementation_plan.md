@@ -1,33 +1,30 @@
-# Rework VTOL Core to Basic Node
+# Rencana Perbaikan Dokumentasi (Documentation Cleanup & Refactoring) - Refaktor README
 
-Simplify `vtol_core.py` from a complex failsafe/watchdog node to a basic, clean ROS2 node that logs status changes and requests the autopilot telemetry stream rate.
+Rencana ini bertujuan untuk menyederhanakan `README.md` secara menyeluruh dengan menghapus materi/panduan generik (seperti tutorial instalasi WSL2/Docker langkah demi langkah, spesifikasi hardware, dan penjelasan teori konsep dasar) dan memfokuskannya menjadi dokumentasi teknis developer yang ringkas, bersih, dan praktis.
 
 ## Proposed Changes
 
-### vtol_control Package
+### Dokumentasi Repositori (Workspace Root)
 
-#### [MODIFY] [vtol_core.py](../workspace/src/vtol_control/vtol_control/vtol_core.py)
+---
 
-- Change inheritance of `VtolCore` from `VtolBaseNode` to `rclpy.node.Node`.
-- Remove the 10Hz failsafe watchdog timer.
-- Remove automated failsafe `LAND` commands.
-- Remove `StatusText` telemetry subscription and forwarding.
-- Remove GCS/Pilot manual override detection flags.
-- Keep:
-  - Subscription to `/mavros/state`.
-  - Logging of connection status, arm status, and flight mode changes.
-  - Telemetry stream rate request to autopilot via `/mavros/set_stream_rate`.
+#### [MODIFY] [README.md](../README.md)
+Refaktor `README.md` agar memiliki struktur yang lebih ramping sebagai berikut:
+1. **Pendahuluan:** Deskripsi singkat proyek pengembangan VTOL dengan ROS2 & Docker.
+2. **Prasyarat & Setup Cepat (Quick Start):**
+   - Hapus detail panduan instalasi WSL2/Docker yang bersifat generik (berisi perintah `wsl --install`, registrasi gpg key, usermod, dll.). Developer cukup diarahkan untuk menginstal WSL2 & Docker secara mandiri.
+   - Satukan langkah build, up, dan exec kontainer menjadi satu alur instalasi/eksekusi cepat.
+3. **Alur Kerja Harian (Daily Workflow):** Alur ringkas menyalakan docker, pull update terbaru, masuk ke container, dan mematikan docker.
+4. **Koneksi SITL & Mission Planner:** Langkah penyambungan MAVROS kontainer dengan Mission Planner di Windows Host.
+5. **Cheat Sheet Perintah Penting (ROS2 & MAVROS):** Rangkuman perintah kompilasi (`colcon build`), opsi menjalankan sistem (launch files), pemantauan topik telemetri, dan proses pembersihan node (`pkill`).
+6. **Struktur Workspace & Penjelasan Script:**
+   - Penjelasan ringkas mekanisme volume mount.
+   - Daftar skrip kontrol riil pada package `vtol_control` beserta perannya.
+7. **Deployment ke SBC (Raspberry Pi):** Tautan langsung ke [docs/sbc_deployment.md](docs/sbc_deployment.md).
 
-#### [MODIFY] [struktur_kode.md](struktur_kode.md)
-
-- Update documentation to reflect the simplified code structure of the new basic `vtol_core.py`.
-
-#### [MODIFY] [failsafe_dan_konfigurasi.md](failsafe_dan_konfigurasi.md)
-
-- Update/simplify the section on `vtol_core.py` failsafes, clarifying that it has been reverted to a basic state monitoring node without active watchdog control.
+---
 
 ## Verification Plan
 
-### Automated Tests
-- Run `colcon build --packages-select vtol_control` to compile the package.
-- Run `ros2 run vtol_control vtol_core` or launch it via `ros2 launch vtol_control vtol_core.launch.py` to verify it runs and initializes successfully.
+### Manual Verification
+- Membaca berkas `README.md` baru untuk memastikan isinya sangat ramping, to-the-point, dan tidak mengandung panduan generik/teoretis yang tidak penting bagi pengembangan sehari-hari.

@@ -1,4 +1,2 @@
-- [x] Review `docs/sbc_deployment.md` (Checked: already fully correct).
-- [x] Review `README.md` (Checked: already fully correct).
-- [x] Update `docs/sistem_kerja.md` to match simplified `vtol_core.py` (Done).
-- [x] Update `docs/panduan_perintah.md` to include the new `mission_maneuver` script (Done).
+- [x] Write the new, clean, and concise `README.md`
+- [x] Update `docs/walkthrough.md` with the new changes

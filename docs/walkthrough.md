@@ -1,24 +1,21 @@
-# Walkthrough - Documentation Refactoring and Paths Standardization
+# Walkthrough - Refaktor Menyeluruh README.md
 
-All documentation files have been audited and refactored to align with the requested standardizations: converting absolute links to relative links, rewriting the ROS2 package section to focus purely on theory, and integrating central links to the commands guide.
+Berkas `README.md` telah direfaktor secara menyeluruh menjadi dokumen panduan developer yang bersih, ringkas, dan fokus pada pengembangan harian (to-the-point).
 
-## Summary of Changes
+## Ringkasan Perubahan
 
-### README Updates
+### 1. Perampingan Dokumen `README.md`
 - **[README.md](../README.md)**:
-  - **Section 6**: Replaced explicit telemetry verification commands (such as `ros2 topic list` and `ros2 topic echo`) with a direct reference link pointing to [panduan_perintah.md](docs/panduan_perintah.md).
-  - **Section 10**: Replaced the step-by-step package creation instructions with pure development theory, detailing why development must happen in a Package (covering standard build systems, dependency declarations via `package.xml`, and registering console script entry points).
+  - **Penghapusan Materi Generik:** Menghapus bagian penjelasan teoretis konsep dasar (WSL2, WSLg, Docker, ROS2, MAVLink), tabel spesifikasi hardware minimum, serta panduan instalasi WSL2 dan Docker Engine langkah-demi-langkah (developer diasumsikan sudah atau dapat menginstalnya secara mandiri).
+  - **Penyederhanaan Quick Start:** Menggabungkan prasyarat sistem dengan instruksi instan kloning, pembangunan kontainer, dan akses kontainer (`docker compose build` & `docker compose up` & `docker exec`).
+  - **Restrukturisasi Bagian Kontrol & Kompilasi:** Cheat sheet perintah ROS 2/MAVROS, kompilasi workspace (`colcon build`), pemantauan telemetri, dan pembunuhan proses node (`pkill`) disajikan secara padat dalam satu tabel/daftar perintah.
+  - **Visualisasi Volume Mount & Struktur Script:** Menyimpan ringkasan alur volume mount serta penjelasan peran masing-masing skrip di dalam package `vtol_control`.
 
-### Relative Paths Refactoring
-Replaced all absolute UNC paths (`file:///wsl.localhost/...`) with standard relative paths inside the markdown files:
-- **[docs/failsafe_dan_konfigurasi.md](docs/failsafe_dan_konfigurasi.md)**:
-  - `[fcu_url.txt]` link changed to relative path `../workspace/src/vtol_control/config/fcu_url.txt`.
-  - `[vtol_core.launch.py]` link changed to relative path `../workspace/src/vtol_control/launch/vtol_core.launch.py`.
-  - `[vtol_core.py]` link changed to relative path `../workspace/src/vtol_control/vtol_control/vtol_core.py`.
-- **[docs/sistem_kerja.md](docs/sistem_kerja.md)**:
-  - `[vtol_core.py]` link changed to relative path `../workspace/src/vtol_control/vtol_control/vtol_core.py`.
-- **[docs/struktur_kode.md](docs/struktur_kode.md)**:
-  - `[vtol_core.py]` link changed to relative path `../workspace/src/vtol_control/vtol_control/vtol_core.py`.
+---
 
-## Verification
-A final repository-wide grep verification was performed. No absolute `file:///` links remain in any of the documentation files.
+## Verifikasi Build
+Kompilasi ulang package dilakukan di dalam kontainer `vtol_dev` untuk menjamin integritas program tetap terjaga:
+```bash
+cd /home/pilot/workspace && colcon build --packages-select vtol_control
+```
+*Hasil: Build sukses tanpa kendala.*
