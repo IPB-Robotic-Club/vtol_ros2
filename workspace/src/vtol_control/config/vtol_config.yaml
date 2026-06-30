@@ -13,3 +13,19 @@ profiles:
   serial:
     fcu_url: "/dev/ttyACM0:921600"
 
+# Parameter PID untuk Centering ArUco
+pid_centering:
+  kp_roll: 120.0        # Proportional gain untuk Roll (mengoreksi deviasi X)
+  ki_roll: 5.0          # Integral gain untuk Roll
+  kd_roll: 15.0         # Derivative gain untuk Roll
+  kp_pitch: 120.0       # Proportional gain untuk Pitch (mengoreksi deviasi Y)
+  ki_pitch: 5.0         # Integral gain untuk Pitch
+  kd_pitch: 15.0        # Derivative gain untuk Pitch
+  max_override: 100     # Deviasi maksimum dari 1500 (nilai RC aman: [1400, 1600])
+  error_threshold: 0.06 # Batas toleransi error (6% dari setengah ukuran layar)
+  centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan
+  marker_lost_timeout: 1.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
+  takeoff_altitude: 1.5    # Ketinggian lepas landas otonom (meter) sebelum centering
+
+
+
