@@ -201,6 +201,10 @@ class MissionCenteringNode(VtolBaseNode):
             except Exception:
                 pass
 
+    def get_current_time(self):
+        """Mendapatkan waktu saat ini menggunakan clock ROS (mendukung sim_time)."""
+        return self.get_clock().now().nanoseconds / 1e9
+
     def write_warn(self, message):
         self.get_logger().warn(message)
         if self.log_file:
@@ -250,7 +254,7 @@ class MissionCenteringNode(VtolBaseNode):
             self.marker_detected = data.get('detected', False)
 
             if self.marker_detected and len(data.get('markers', [])) > 0:
-                recv_time = time.time()
+                recv_time = self.get_current_time()
                 self.last_detection_time = recv_time
                 self.first_detection_made = True
 
@@ -290,7 +294,7 @@ class MissionCenteringNode(VtolBaseNode):
                 # Log frame tidak terdeteksi
                 if self.csv_file:
                     try:
-                        recv_time = time.time()
+                        recv_time = self.get_current_time()
                         self.csv_file.write(
                             f"VISION_NODET,{recv_time:.4f},{self.loop_iter},{vision_ts:.4f},"
                             f"{frame_count},{int(frame_w)},{int(frame_h)},"
@@ -407,12 +411,12 @@ class MissionCenteringNode(VtolBaseNode):
         self.pid_roll.reset()
         self.pid_pitch.reset()
 
-        centering_start_time = time.time()
+        centering_start_time = self.get_current_time()
         self.centering_active = True
 
         rate = self.create_rate(20.0) # Rate loop stabil 20Hz
         while rclpy.ok() and not self.centered:
-            current_time = time.time()
+            current_time = self.get_current_time()
             self.loop_iter += 1
 
             # Watchdog: Proteksi keselamatan mode terbang manual
@@ -467,11 +471,18 @@ class MissionCenteringNode(VtolBaseNode):
                 self.centered = True
                 break
 
-            rclpy.spin_once(self, timeout_sec=0.0)
-            try:
-                rate.sleep()
-            except Exception:
-                pass
+            # Pengganti rate.sleep() untuk menghindari deadlock di ROS 2 (sim_time)
+            # Selalu gunakan rclpy.spin_once() agar callback dan /clock tetap terproses
+            target_dt = 0.05  # 20 Hz
+            elapsed_in_loop = self.get_current_time() - current_time
+            sleep_time = target_dt - elapsed_in_loop
+            
+            if sleep_time > 0.0:
+                spin_start = self.get_current_time()
+                while rclpy.ok() and (self.get_current_time() - spin_start) < sleep_time:
+                    rclpy.spin_once(self, timeout_sec=0.01)
+            else:
+                rclpy.spin_once(self, timeout_sec=0.0)
 
         self.centering_active = False
 
