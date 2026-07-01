@@ -17,10 +17,10 @@ profiles:
 pid_centering:
   kp_roll: 15.0         # Proportional gain untuk Roll (mengoreksi deviasi X)
   ki_roll: 0.0          # Integral gain untuk Roll
-  kd_roll: 40.0         # Derivative gain untuk Roll (TINGGI untuk redam overshoot)
+  kd_roll: 20.0         # Derivative gain untuk Roll (untuk redam overshoot)
   kp_pitch: 15.0        # Proportional gain untuk Pitch (mengoreksi deviasi Y)
   ki_pitch: 0.0         # Integral gain untuk Pitch
-  kd_pitch: 40.0        # Derivative gain untuk Pitch (TINGGI untuk redam overshoot)
+  kd_pitch: 20.0        # Derivative gain untuk Pitch (untuk redam overshoot)
   max_override: 50      # Deviasi maksimum dari 1500 (nilai RC aman: [1450, 1550])
   error_threshold: 0.08 # Batas toleransi error (8% dari setengah ukuran layar)
   centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan

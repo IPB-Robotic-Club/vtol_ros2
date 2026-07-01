@@ -33,12 +33,14 @@ class PIDController:
         self.p_term = 0.0
         self.i_term = 0.0
         self.d_term = 0.0
+        self.last_dt = 0.0
 
     def update(self, error, current_time):
         if self.last_time is None:
             self.last_time = current_time
             self.last_error = error
             self.last_output = 0.0
+            self.last_dt = 0.0
             return 0.0
 
         dt = current_time - self.last_time
@@ -48,6 +50,8 @@ class PIDController:
         # Abaikan update jika dt terlalu kecil (kurang dari 10ms)
         if dt < 0.01:
             return self.last_output
+
+        self.last_dt = dt
 
         # Proportional
         self.p_term = self.kp * error
@@ -85,6 +89,7 @@ class PIDController:
         self.p_term = 0.0
         self.i_term = 0.0
         self.d_term = 0.0
+        self.last_dt = 0.0
 
 
 def apply_smooth_deadzone(u_raw, deadzone, band=2.0):
@@ -121,17 +126,17 @@ class MissionCenteringNode(VtolBaseNode):
         self.marker_lost_timeout = self.pid_params['marker_lost_timeout']
         self.takeoff_altitude = self.pid_params['takeoff_altitude']
 
-        # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.3)
+        # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.1)
         # max_out dikurangi deadzone_bias agar output final tidak melebihi max_override
-        deadzone_bias = 10.0
+        deadzone_bias = 25.0
         pid_max_raw = self.max_override - deadzone_bias
         self.pid_roll = PIDController(
             self.pid_params['kp_roll'], self.pid_params['ki_roll'],
-            self.pid_params['kd_roll'], pid_max_raw, d_filter_alpha=0.3
+            self.pid_params['kd_roll'], pid_max_raw, d_filter_alpha=0.1
         )
         self.pid_pitch = PIDController(
             self.pid_params['kp_pitch'], self.pid_params['ki_pitch'],
-            self.pid_params['kd_pitch'], pid_max_raw, d_filter_alpha=0.3
+            self.pid_params['kd_pitch'], pid_max_raw, d_filter_alpha=0.1
         )
 
         self.write_log(
@@ -331,10 +336,10 @@ class MissionCenteringNode(VtolBaseNode):
             u_roll_raw = self.pid_roll.update(self.norm_error_x, current_time)
             u_pitch_raw = self.pid_pitch.update(self.norm_error_y, current_time)
 
-            # Kompensasi deadzone RC dengan smooth transition
-            deadzone_bias = 10.0
-            u_roll = apply_smooth_deadzone(u_roll_raw, deadzone_bias)
-            u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias)
+            # Kompensasi deadzone RC dengan smooth transition (band=0.2 untuk cancellation instan)
+            deadzone_bias = 25.0
+            u_roll = apply_smooth_deadzone(u_roll_raw, deadzone_bias, band=0.2)
+            u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=0.2)
 
             # Clamp ke max_override
             u_roll = max(min(u_roll, self.max_override), -self.max_override)
@@ -368,7 +373,7 @@ class MissionCenteringNode(VtolBaseNode):
         if self.csv_file:
             try:
                 alt = self.current_pose.pose.position.z
-                pid_dt = (current_time - self.pid_roll.last_time) if self.pid_roll.last_time else 0.0
+                pid_dt = self.pid_roll.last_dt
                 stable_dur = (current_time - self.stable_start_time) if self.stable_start_time else 0.0
                 self.csv_file.write(
                     f"PID,{current_time:.4f},{self.loop_iter},{self.last_vision_timestamp:.4f},"
@@ -405,6 +410,7 @@ class MissionCenteringNode(VtolBaseNode):
         centering_start_time = time.time()
         self.centering_active = True
 
+        rate = self.create_rate(20.0) # Rate loop stabil 20Hz
         while rclpy.ok() and not self.centered:
             current_time = time.time()
             self.loop_iter += 1
@@ -461,7 +467,11 @@ class MissionCenteringNode(VtolBaseNode):
                 self.centered = True
                 break
 
-            rclpy.spin_once(self, timeout_sec=0.05)
+            rclpy.spin_once(self, timeout_sec=0.0)
+            try:
+                rate.sleep()
+            except Exception:
+                pass
 
         self.centering_active = False
 
