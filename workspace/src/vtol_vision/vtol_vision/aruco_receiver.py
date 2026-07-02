@@ -183,10 +183,16 @@ class ArucoReceiverNode(Node):
 
             except socket.timeout:
                 continue
+            except OSError:
+                # Socket closed during shutdown, exit loop gracefully
+                break
             except Exception as e:
                 self.get_logger().error(f"Error pada loop penerima: {e}")
 
-        self.sock.close()
+        try:
+            self.sock.close()
+        except Exception:
+            pass
         if self.show_gui:
             cv2.destroyAllWindows()
 
@@ -208,6 +214,10 @@ class ArucoReceiverNode(Node):
 
     def destroy_node(self):
         self.running = False
+        try:
+            self.sock.close()
+        except Exception:
+            pass
         if self.rx_thread.is_alive():
             self.rx_thread.join()
         if self.log_file:

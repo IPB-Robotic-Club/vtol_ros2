@@ -121,6 +121,14 @@ class VtolBaseNode(Node):
             return False
 
     def publish_rc(self):
+        # MAVROS Connection watchdog
+        if self.state_received and (time.time() - self.last_state_time > 2.0):
+            if self.current_state.connected:
+                self.get_logger().error("MAVROS connection lost! Zeroing RC overrides and marking as disconnected.")
+                self.current_state.connected = False
+            self.rc_channels = [0] * 18
+            return
+
         msg = OverrideRCIn()
         msg.channels = self.rc_channels
         self.rc_pub.publish(msg)
@@ -184,6 +192,12 @@ class VtolBaseNode(Node):
             current_time = time.time()
             elapsed = current_time - start_time
             
+            # Watchdog check: connection
+            if self.state_received and not self.current_state.connected:
+                self.get_logger().error("Autopilot disconnected during takeoff! Aborting.")
+                self.abort_flight()
+                return False
+
             # Watchdog check: manual override
             if self.current_state.mode not in ["LOITER", "CMODE(5)"]:
                 self.get_logger().warn(f"Manual override detected during takeoff! Flight mode changed to {self.current_state.mode}. Aborting flight.")
@@ -220,6 +234,12 @@ class VtolBaseNode(Node):
             current_time = time.time()
             elapsed = current_time - start_time
             
+            # Watchdog check: connection
+            if self.state_received and not self.current_state.connected:
+                self.get_logger().error("Autopilot disconnected during hover! Aborting.")
+                self.abort_flight()
+                return False
+
             # Watchdog check: manual override
             if self.current_state.mode not in ["LOITER", "CMODE(5)"]:
                 self.get_logger().warn(f"Manual override detected during hover! Flight mode changed to {self.current_state.mode}. Aborting flight.")
@@ -247,6 +267,11 @@ class VtolBaseNode(Node):
             current_time = time.time()
             elapsed = current_time - start_time
             
+            # Watchdog check: connection
+            if self.state_received and not self.current_state.connected:
+                self.get_logger().error("Autopilot disconnected during landing!")
+                return False
+
             if not self.current_state.armed:
                 self.get_logger().info("Drone successfully DISARMED on ground. Landing complete!")
                 return True

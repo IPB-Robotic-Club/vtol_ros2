@@ -25,6 +25,12 @@ class MissionManeuverNode(VtolBaseNode):
             current_time = time.time()
             elapsed = current_time - start_time
             
+            # Watchdog check: connection
+            if self.state_received and not self.current_state.connected:
+                self.get_logger().error("Autopilot disconnected during maneuver! Aborting.")
+                self.abort_flight()
+                return False
+
             # Watchdog check: manual flight mode override by pilot/GCS
             if self.current_state.mode not in ["LOITER", "CMODE(5)"]:
                 self.get_logger().warn(f"Manual override detected! Flight mode changed to {self.current_state.mode}. Aborting mission.")

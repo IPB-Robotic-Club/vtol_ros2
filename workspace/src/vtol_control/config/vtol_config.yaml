@@ -25,6 +25,7 @@ pid_centering:
   error_threshold: 0.08 # Batas toleransi error (8% dari setengah ukuran layar)
   centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan
   marker_lost_timeout: 3.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
+  deadzone_bias: 25.0   # Kompensasi deadzone RC (nilai bias offset)
 
 # Parameter Lepas Landas Otonom (Takeoff)
 takeoff:

@@ -65,7 +65,8 @@ def get_pid_config():
         'max_override': 100,
         'error_threshold': 0.06,
         'centering_duration': 3.0,
-        'marker_lost_timeout': 1.0
+        'marker_lost_timeout': 1.0,
+        'deadzone_bias': 25.0
     }
 
     if os.path.exists(config_file_path):

@@ -132,8 +132,8 @@ class MissionCenteringNode(VtolBaseNode):
 
         # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.4 untuk keseimbangan smoothing & delay)
         # max_out dikurangi deadzone_bias agar output final tidak melebihi max_override
-        deadzone_bias = 25.0
-        pid_max_raw = self.max_override - deadzone_bias
+        self.deadzone_bias = self.pid_params['deadzone_bias']
+        pid_max_raw = self.max_override - self.deadzone_bias
         self.pid_roll = PIDController(
             self.pid_params['kp_roll'], self.pid_params['ki_roll'],
             self.pid_params['kd_roll'], pid_max_raw, d_filter_alpha=0.4
@@ -345,9 +345,8 @@ class MissionCenteringNode(VtolBaseNode):
             u_pitch_raw = self.pid_pitch.update(self.norm_error_y, current_time)
 
             # Kompensasi deadzone RC dengan smooth transition (band=0.5 untuk pendaratan kuat)
-            deadzone_bias = 25.0
-            u_roll = apply_smooth_deadzone(u_roll_raw, deadzone_bias, band=0.5)
-            u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=0.5)
+            u_roll = apply_smooth_deadzone(u_roll_raw, self.deadzone_bias, band=0.5)
+            u_pitch = apply_smooth_deadzone(u_pitch_raw, self.deadzone_bias, band=0.5)
 
             # Clamp ke max_override
             u_roll = max(min(u_roll, self.max_override), -self.max_override)
@@ -422,6 +421,12 @@ class MissionCenteringNode(VtolBaseNode):
         while rclpy.ok() and not self.centered:
             current_time = self.get_current_time()
             self.loop_iter += 1
+
+            # Watchdog: Proteksi keselamatan koneksi MAVROS
+            if self.state_received and not self.current_state.connected:
+                self.write_warn("Autopilot terputus selama centering! Abort misi.")
+                self.abort_flight()
+                return
 
             # Watchdog: Proteksi keselamatan mode terbang manual
             if self.current_state.mode not in ["LOITER", "CMODE(5)"]:

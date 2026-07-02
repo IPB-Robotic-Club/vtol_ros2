@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, Shutdown
 from launch.substitutions import LaunchConfiguration
 from launch.conditions import IfCondition
 from ament_index_python.packages import get_package_share_directory
@@ -54,7 +54,8 @@ def generate_launch_description():
         parameters=[{
             'fcu_url': fcu_url,
             'system_id': 255,
-        }]
+        }],
+        on_exit=Shutdown()
     )
 
     # Launch the VTOL core node (monitoring and failsafes)
@@ -62,7 +63,8 @@ def generate_launch_description():
         package='vtol_control',
         executable='vtol_core',
         name='vtol_core_node',
-        output='screen'  # Print logs directly to console for visibility
+        output='screen',  # Print logs directly to console for visibility
+        on_exit=Shutdown()
     )
 
     # Launch the vehicle status HUD printer conditionally
@@ -71,7 +73,8 @@ def generate_launch_description():
         executable='vehicle_status',
         name='vehicle_status_printer',
         output='screen',
-        condition=IfCondition(show_hud)
+        condition=IfCondition(show_hud),
+        on_exit=Shutdown()
     )
 
     # Launch aruco_receiver from vtol_vision
@@ -79,7 +82,8 @@ def generate_launch_description():
         package='vtol_vision',
         executable='aruco_receiver',
         name='aruco_receiver_node',
-        output='screen'
+        output='screen',
+        on_exit=Shutdown()
     )
 
     return LaunchDescription([
