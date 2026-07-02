@@ -47,8 +47,8 @@ class PIDController:
         if dt <= 0.0:
             return self.last_output
 
-        # Abaikan update jika dt terlalu kecil (kurang dari 10ms)
-        if dt < 0.01:
+        # Abaikan update jika dt terlalu kecil (kurang dari 30ms) untuk mencegah ledakan D-term dari jitter ROS
+        if dt < 0.03:
             return self.last_output
 
         self.last_dt = dt
@@ -64,6 +64,10 @@ class PIDController:
 
         # Derivative dengan low-pass filter untuk meredam spike dari jitter dt
         raw_derivative = (error - self.last_error) / dt
+        
+        # Clamp raw derivative to prevent wild kicks from sudden marker shifts
+        max_derivative = 2.0
+        raw_derivative = max(min(raw_derivative, max_derivative), -max_derivative)
         # Low-pass: filtered = alpha * raw + (1-alpha) * prev_filtered
         self.filtered_derivative = (
             self.d_filter_alpha * raw_derivative
@@ -126,17 +130,17 @@ class MissionCenteringNode(VtolBaseNode):
         self.marker_lost_timeout = self.pid_params['marker_lost_timeout']
         self.takeoff_altitude = self.pid_params['takeoff_altitude']
 
-        # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.1)
+        # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.4 untuk keseimbangan smoothing & delay)
         # max_out dikurangi deadzone_bias agar output final tidak melebihi max_override
         deadzone_bias = 25.0
         pid_max_raw = self.max_override - deadzone_bias
         self.pid_roll = PIDController(
             self.pid_params['kp_roll'], self.pid_params['ki_roll'],
-            self.pid_params['kd_roll'], pid_max_raw, d_filter_alpha=0.1
+            self.pid_params['kd_roll'], pid_max_raw, d_filter_alpha=0.4
         )
         self.pid_pitch = PIDController(
             self.pid_params['kp_pitch'], self.pid_params['ki_pitch'],
-            self.pid_params['kd_pitch'], pid_max_raw, d_filter_alpha=0.1
+            self.pid_params['kd_pitch'], pid_max_raw, d_filter_alpha=0.4
         )
 
         self.write_log(
@@ -269,7 +273,7 @@ class MissionCenteringNode(VtolBaseNode):
                 self.last_raw_center_x = center_x
                 self.last_raw_center_y = center_y
 
-                # Normalisasi error menggunakan dimensi aktual dari frame
+                # Normalisasi error menggunakan dimensi aktual dari frame (dikembalikan ke PV - SP, negative feedback)
                 self.norm_error_x = (center_x - (frame_w / 2.0)) / (frame_w / 2.0)
                 self.norm_error_y = (center_y - (frame_h / 2.0)) / (frame_h / 2.0)
 
@@ -340,10 +344,10 @@ class MissionCenteringNode(VtolBaseNode):
             u_roll_raw = self.pid_roll.update(self.norm_error_x, current_time)
             u_pitch_raw = self.pid_pitch.update(self.norm_error_y, current_time)
 
-            # Kompensasi deadzone RC dengan smooth transition (band=0.2 untuk cancellation instan)
+            # Kompensasi deadzone RC dengan smooth transition (band=0.5 untuk pendaratan kuat)
             deadzone_bias = 25.0
-            u_roll = apply_smooth_deadzone(u_roll_raw, deadzone_bias, band=0.2)
-            u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=0.2)
+            u_roll = apply_smooth_deadzone(u_roll_raw, deadzone_bias, band=0.5)
+            u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=0.5)
 
             # Clamp ke max_override
             u_roll = max(min(u_roll, self.max_override), -self.max_override)
