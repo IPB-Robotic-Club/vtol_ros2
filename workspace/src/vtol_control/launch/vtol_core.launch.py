@@ -74,11 +74,20 @@ def generate_launch_description():
         condition=IfCondition(show_hud)
     )
 
+    # Launch aruco_receiver from vtol_vision
+    aruco_receiver_node = Node(
+        package='vtol_vision',
+        executable='aruco_receiver',
+        name='aruco_receiver_node',
+        output='screen'
+    )
+
     return LaunchDescription([
         SetEnvironmentVariable('FASTRTPS_DEFAULT_PROFILES_FILE', fastdds_path),
         SetEnvironmentVariable('ROS_AUTOMATIC_DISCOVERY_RANGE', 'LOCALHOST'),
         show_hud_arg,
         mavros_node,
         vtol_core_node,
-        vehicle_status_node
+        vehicle_status_node,
+        aruco_receiver_node
     ])
