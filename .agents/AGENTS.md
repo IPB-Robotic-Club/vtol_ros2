@@ -12,4 +12,16 @@ This document defines behavior guidelines and style rules for any AI agents work
 
 ## 3. Development & Safety Guidelines
 - **Rule**: Always compile the workspace using `colcon build --packages-select vtol_control` inside the running `vtol_dev` container to verify build integrity before declaring tasks complete.
-- **Rule**: Active failsafes and safety watchdog commands (like sending automatic software `LAND` mode changes on loss of heartbeat) must be configured directly on the autopilot firmware (ArduPilot/PX4) parameters, keeping the ROS2 nodes lightweight and purely focused on telemetry monitoring and mission logic.
+- **Rule**: Low-level heartbeat/RC-loss failsafes (e.g., auto-LAND on GCS heartbeat loss) must be configured directly on the autopilot firmware (ArduPilot/PX4) parameters — NOT from ROS2 nodes.
+- **Rule**: Mission-level failsafes triggered by mission logic (e.g., calling `self.land()` or `self.abort_flight()` when a marker is lost for too long) ARE permitted in ROS2 nodes. These are intentional mission abort sequences, not low-level hardware watchdogs.
+
+## 4. Troubleshooting and Log Analysis
+- **Rule**: When troubleshooting issues related to flight logs, PID tuning, RC overrides, or centering behavior, agents MUST use the consolidated analysis script at [workspace/analyze.py](../workspace/analyze.py) to investigate correlation and command mappings.
+- **Usage**:
+  - To view correlation metrics: `python3 workspace/analyze.py --mode correlation` (reads `centering_data.csv`).
+  - To inspect pitch control data (Err_Y vs RC_P): `python3 workspace/analyze.py --mode pitch --start 100 --end 120`.
+  - To inspect roll control data (Err_X vs RC_R): `python3 workspace/analyze.py --mode roll --start 100 --end 120`.
+  - To analyze vision detection performance: `python3 workspace/analyze.py --mode vision` (reads `aruco_vision.log`).
+  - To analyze mission PID and altitude metrics: `python3 workspace/analyze.py --mode mission` (reads `mission_centering.log`).
+  - To run all analysis tools at once: `python3 workspace/analyze.py --mode all`.
+  - You can specify custom log paths via `--csv <path>`, `--vision-log <path>`, or `--mission-log <path>`.
