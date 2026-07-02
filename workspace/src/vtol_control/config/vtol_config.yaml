@@ -21,8 +21,13 @@ pid_centering:
   kp_pitch: 5.0         # Proportional gain untuk Pitch (mengoreksi deviasi Y)
   ki_pitch: 0.2         # Integral gain untuk Pitch
   kd_pitch: 8.0         # Derivative gain untuk Pitch (untuk redam overshoot)
+  kp_yaw: 3.0           # Proportional gain untuk Yaw (Heading)
+  ki_yaw: 0.1           # Integral gain untuk Yaw
+  kd_yaw: 4.0           # Derivative gain untuk Yaw
   max_override: 30      # Deviasi maksimum dari 1500 (nilai RC aman: [1470, 1530])
-  error_threshold: 0.08 # Batas toleransi error (8% dari setengah ukuran layar)
+  max_yaw_override: 50  # Deviasi maksimal RC4 (Yaw) dari 1500
+  yaw_error_threshold: 0.1 # Batas toleransi error Yaw dalam radian (~5.7 derajat)
+  error_threshold: 0.08 # Batas toleransi error translasi
   centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan
   marker_lost_timeout: 3.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
   deadzone_bias: 25.0   # Kompensasi deadzone RC (nilai bias offset)

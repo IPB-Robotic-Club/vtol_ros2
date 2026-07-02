@@ -24,7 +24,10 @@ def get_camera_config():
         'udp_ip': '127.0.0.1',
         'udp_port': 5005,
         'aruco_dict': 'DICT_4X4_50',
-        'show_gui': True
+        'show_gui': True,
+        'marker_length': 0.20,
+        'camera_matrix': [320.0, 0.0, 320.0, 0.0, 320.0, 240.0, 0.0, 0.0, 1.0],
+        'dist_coeffs': [0.0, 0.0, 0.0, 0.0, 0.0]
     }
 
     if os.path.exists(config_file_path):

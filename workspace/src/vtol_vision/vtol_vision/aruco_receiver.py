@@ -6,10 +6,46 @@ import json
 import time
 import os
 import rclpy
+import math
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from std_msgs.msg import String
+from geometry_msgs.msg import TransformStamped
+from tf2_ros import TransformBroadcaster
 from vtol_vision.config_reader import get_camera_config
+
+def rotvec2quat(rvec):
+    """Convert OpenCV rvec to quaternion (x,y,z,w)."""
+    R, _ = cv2.Rodrigues(rvec)
+    trace = R[0,0] + R[1,1] + R[2,2]
+    if trace > 0:
+        S = math.sqrt(trace + 1.0) * 2
+        w = 0.25 * S
+        x = (R[2,1] - R[1,2]) / S
+        y = (R[0,2] - R[2,0]) / S
+        z = (R[1,0] - R[0,1]) / S
+    elif (R[0,0] > R[1,1]) and (R[0,0] > R[2,2]):
+        S = math.sqrt(1.0 + R[0,0] - R[1,1] - R[2,2]) * 2
+        w = (R[2,1] - R[1,2]) / S
+        x = 0.25 * S
+        y = (R[0,1] + R[1,0]) / S
+        z = (R[0,2] + R[2,0]) / S
+    elif R[1,1] > R[2,2]:
+        S = math.sqrt(1.0 + R[1,1] - R[0,0] - R[2,2]) * 2
+        w = (R[0,2] - R[2,0]) / S
+        x = (R[0,1] + R[1,0]) / S
+        y = 0.25 * S
+        z = (R[1,2] + R[2,1]) / S
+    else:
+        S = math.sqrt(1.0 + R[2,2] - R[0,0] - R[1,1]) * 2
+        w = (R[1,0] - R[0,1]) / S
+        x = (R[0,2] + R[2,0]) / S
+        y = (R[1,2] + R[2,1]) / S
+        z = 0.25 * S
+    
+    # Normalize
+    mag = math.sqrt(x*x + y*y + z*z + w*w)
+    return (x/mag, y/mag, z/mag, w/mag)
 
 
 LOG_PATH = "/home/pilot/workspace/aruco_vision.log"
@@ -41,6 +77,12 @@ class ArucoReceiverNode(Node):
         self.udp_port = self.cam_config['udp_port']
         self.aruco_dict_name = self.cam_config['aruco_dict']
         self.show_gui = self.cam_config['show_gui']
+        
+        self.marker_length = self.cam_config.get('marker_length', 0.20)
+        cam_mat_list = self.cam_config.get('camera_matrix', [320.0, 0.0, 320.0, 0.0, 320.0, 240.0, 0.0, 0.0, 1.0])
+        self.camera_matrix = np.array(cam_mat_list, dtype=np.float32).reshape(3, 3)
+        dist_list = self.cam_config.get('dist_coeffs', [0.0, 0.0, 0.0, 0.0, 0.0])
+        self.dist_coeffs = np.array(dist_list, dtype=np.float32)
 
         # Setup ArUco Dictionary & Parameters (OpenCV 4.6.0 API)
         dict_id = getattr(cv2.aruco, self.aruco_dict_name, cv2.aruco.DICT_4X4_50)
@@ -54,6 +96,7 @@ class ArucoReceiverNode(Node):
         # Setup Publishers
         self.image_pub = self.create_publisher(Image, '/vtol/camera/image_raw', 10)
         self.detection_pub = self.create_publisher(String, '/vtol/aruco/detection', 10)
+        self.tf_broadcaster = TransformBroadcaster(self)
 
         # UDP Socket Setup
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -136,17 +179,46 @@ class ArucoReceiverNode(Node):
                     detections = []
                     if ids is not None:
                         cv2.aruco.drawDetectedMarkers(frame, corners, ids)
+                        
+                        # Estimate pose
+                        rvecs, tvecs, _objPoints = cv2.aruco.estimatePoseSingleMarkers(
+                            corners, self.marker_length, self.camera_matrix, self.dist_coeffs
+                        )
 
                         for i, marker_id in enumerate(ids.flatten()):
                             c = corners[i][0]
                             center_x = float(np.mean(c[:, 0]))
                             center_y = float(np.mean(c[:, 1]))
+                            
+                            rvec = rvecs[i][0]
+                            tvec = tvecs[i][0]
 
                             detections.append({
                                 'id': int(marker_id),
                                 'center': [center_x, center_y],
                                 'corners': c.tolist()
                             })
+                            
+                            # Draw axes
+                            cv2.drawFrameAxes(frame, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_length * 0.5)
+                            
+                            # Broadcast TF
+                            t = TransformStamped()
+                            t.header.stamp = self.get_clock().now().to_msg()
+                            t.header.frame_id = 'camera_link'
+                            t.child_frame_id = f'aruco_marker_{int(marker_id)}'
+                            
+                            t.transform.translation.x = float(tvec[0])
+                            t.transform.translation.y = float(tvec[1])
+                            t.transform.translation.z = float(tvec[2])
+                            
+                            qx, qy, qz, qw = rotvec2quat(rvec)
+                            t.transform.rotation.x = qx
+                            t.transform.rotation.y = qy
+                            t.transform.rotation.z = qz
+                            t.transform.rotation.w = qw
+                            
+                            self.tf_broadcaster.sendTransform(t)
 
                     # Publikasikan data deteksi
                     detection_msg = String()

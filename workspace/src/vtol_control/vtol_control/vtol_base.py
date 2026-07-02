@@ -75,7 +75,7 @@ class VtolBaseNode(Node):
 
     def _state_callback(self, msg):
         self.current_state = msg
-        self.last_state_time = time.time()
+        self.last_state_time = self.get_clock().now().nanoseconds / 1e9
         self.state_received = True
         self.on_state(msg)
 
@@ -122,7 +122,7 @@ class VtolBaseNode(Node):
 
     def publish_rc(self):
         # MAVROS Connection watchdog
-        if self.state_received and (time.time() - self.last_state_time > 2.0):
+        if self.state_received and ((self.get_clock().now().nanoseconds / 1e9) - self.last_state_time > 3.0):
             if self.current_state.connected:
                 self.get_logger().error("MAVROS connection lost! Zeroing RC overrides and marking as disconnected.")
                 self.current_state.connected = False

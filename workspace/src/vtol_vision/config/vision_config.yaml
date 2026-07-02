@@ -4,3 +4,7 @@ camera:
   udp_port: 5005
   aruco_dict: "DICT_4X4_50"  # Pilihan: DICT_4X4_50, DICT_5X5_50, DICT_6X6_50, dll.
   show_gui: false             # Set ke true untuk menampilkan visualisasi jendela GUI (cv2.imshow) secara langsung
+  marker_length: 0.20         # Ukuran fisik ArUco dalam meter (contoh 20cm)
+  # Default Camera Intrinsic (HFOV ~80 deg for 640x480). Sesuaikan dengan parameter kamera Webots Anda
+  camera_matrix: [320.0, 0.0, 320.0, 0.0, 320.0, 240.0, 0.0, 0.0, 1.0]
+  dist_coeffs: [0.0, 0.0, 0.0, 0.0, 0.0]
