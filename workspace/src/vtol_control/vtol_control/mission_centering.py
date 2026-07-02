@@ -2,7 +2,7 @@ import rclpy
 from rclpy.signals import SignalHandlerOptions
 from std_msgs.msg import String
 from vtol_control.vtol_base import VtolBaseNode
-from vtol_control.config_reader import get_pid_config
+from vtol_control.config_reader import get_pid_config, get_takeoff_config
 import time
 import json
 import math
@@ -128,7 +128,7 @@ class MissionCenteringNode(VtolBaseNode):
         self.error_threshold = self.pid_params['error_threshold']
         self.centering_duration = self.pid_params['centering_duration']
         self.marker_lost_timeout = self.pid_params['marker_lost_timeout']
-        self.takeoff_altitude = self.pid_params['takeoff_altitude']
+        self.takeoff_altitude = get_takeoff_config()['takeoff_altitude']
 
         # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.4 untuk keseimbangan smoothing & delay)
         # max_out dikurangi deadzone_bias agar output final tidak melebihi max_override
@@ -404,7 +404,7 @@ class MissionCenteringNode(VtolBaseNode):
         self.write_log("Menunggu marker ArUco terdeteksi...")
 
         # Takeoff ke ketinggian yang terkonfigurasi
-        if not self.takeoff(target_altitude=self.takeoff_altitude):
+        if not self.takeoff():
             return
 
         # Hover sebentar untuk stabilisasi awal

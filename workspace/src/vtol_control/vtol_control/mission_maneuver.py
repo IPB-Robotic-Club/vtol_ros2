@@ -47,8 +47,8 @@ class MissionManeuverNode(VtolBaseNode):
         return False
 
     def run_mission(self):
-        # 1. Takeoff to 2.5 meters
-        if not self.takeoff(target_altitude=2.5, throttle=1700):
+        # 1. Takeoff using configured altitude and throttle
+        if not self.takeoff():
             return
 
         # 2. Hover to stabilize

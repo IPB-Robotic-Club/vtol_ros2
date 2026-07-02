@@ -65,8 +65,7 @@ def get_pid_config():
         'max_override': 100,
         'error_threshold': 0.06,
         'centering_duration': 3.0,
-        'marker_lost_timeout': 1.0,
-        'takeoff_altitude': 1.5
+        'marker_lost_timeout': 1.0
     }
 
     if os.path.exists(config_file_path):
@@ -82,5 +81,40 @@ def get_pid_config():
             print(f"Warning: Gagal membaca konfigurasi PID dari {config_file_path}: {e}")
     
     return default_pid
+
+
+def get_takeoff_config():
+    """
+    Membaca parameter takeoff dari vtol_config.yaml.
+    """
+    package_name = 'vtol_control'
+    try:
+        package_share_dir = get_package_share_directory(package_name)
+    except Exception:
+        package_share_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    src_config_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', package_name, 'config', 'vtol_config.yaml'))
+    installed_config_path = os.path.join(package_share_dir, 'config', 'vtol_config.yaml')
+    config_file_path = src_config_path if os.path.exists(src_config_path) else installed_config_path
+
+    default_takeoff = {
+        'takeoff_altitude': 1.5,
+        'takeoff_throttle': 1700
+    }
+
+    if os.path.exists(config_file_path):
+        try:
+            with open(config_file_path, 'r') as f:
+                config = yaml.safe_load(f)
+                if config and 'takeoff' in config:
+                    takeoff_data = config['takeoff']
+                    if 'altitude' in takeoff_data:
+                        default_takeoff['takeoff_altitude'] = takeoff_data['altitude']
+                    if 'throttle' in takeoff_data:
+                        default_takeoff['takeoff_throttle'] = takeoff_data['throttle']
+        except Exception as e:
+            print(f"Warning: Gagal membaca konfigurasi takeoff dari {config_file_path}: {e}")
+    
+    return default_takeoff
 
 

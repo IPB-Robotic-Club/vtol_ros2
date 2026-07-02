@@ -14,6 +14,7 @@ This document defines behavior guidelines and style rules for any AI agents work
 - **Rule**: Always compile the workspace using `colcon build --packages-select vtol_control` inside the running `vtol_dev` container to verify build integrity before declaring tasks complete.
 - **Rule**: Low-level heartbeat/RC-loss failsafes (e.g., auto-LAND on GCS heartbeat loss) must be configured directly on the autopilot firmware (ArduPilot/PX4) parameters — NOT from ROS2 nodes.
 - **Rule**: Mission-level failsafes triggered by mission logic (e.g., calling `self.land()` or `self.abort_flight()` when a marker is lost for too long) ARE permitted in ROS2 nodes. These are intentional mission abort sequences, not low-level hardware watchdogs.
+- **Rule**: When changing flight altitude (takeoff/target altitude) or climb thrust (throttle), agents must configure it inside [vtol_config.yaml](../workspace/src/vtol_control/config/vtol_config.yaml) under the `takeoff` block. Do NOT hardcode these values in Python mission scripts.
 
 ## 4. Troubleshooting and Log Analysis
 - **Rule**: When troubleshooting issues related to flight logs, PID tuning, RC overrides, or centering behavior, agents MUST use the consolidated analysis script at [workspace/analyze.py](../workspace/analyze.py) to investigate correlation and command mappings.

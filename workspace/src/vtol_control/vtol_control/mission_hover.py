@@ -9,8 +9,8 @@ class MissionHoverNode(VtolBaseNode):
         self.get_logger().info("Mission Hover Node Started!")
 
     def run_mission(self):
-        # 1. Takeoff to 2.0 meters, climbing with throttle 1700
-        if self.takeoff(target_altitude=2.0, throttle=1700):
+        # 1. Takeoff using configured altitude and throttle
+        if self.takeoff():
             # 2. Hover for exactly 5.0 seconds
             if self.hover(duration_seconds=5.0):
                 # 3. Land gracefully and release overrides

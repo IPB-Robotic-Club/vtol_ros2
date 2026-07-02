@@ -125,8 +125,15 @@ class VtolBaseNode(Node):
         msg.channels = self.rc_channels
         self.rc_pub.publish(msg)
 
-    def takeoff(self, target_altitude, throttle=1700, timeout=20.0):
+    def takeoff(self, target_altitude=None, throttle=None, timeout=20.0):
         """Synchronously commands takeoff to target_altitude using RC overrides."""
+        from vtol_control.config_reader import get_takeoff_config
+        config = get_takeoff_config()
+        if target_altitude is None:
+            target_altitude = config.get('takeoff_altitude', 1.5)
+        if throttle is None:
+            throttle = config.get('takeoff_throttle', 1700)
+
         self.get_logger().info(f"Starting Takeoff to {target_altitude}m with throttle {throttle}...")
         
         # Verify connection first
