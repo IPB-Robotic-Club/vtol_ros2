@@ -1,247 +1,85 @@
-# Panduan Lengkap & Komprehensif: Pengembangan VTOL Autonomous (Untuk Pemula)
+# VTOL Autonomous ROS2 Workspace
 
-Selamat datang di repositori pengembangan **Autonomous Vertical Take-Off and Landing (VTOL)**! Repositori ini dirancang khusus untuk memfasilitasi Anda yang baru memulai belajar pemrograman drone autonomous menggunakan **ROS2**, **Docker**, dan **WSL2** di sistem operasi Windows.
+Repositori ini menyediakan lingkungan pengembangan drone autonomous **Vertical Take-Off and Landing (VTOL)** menggunakan **ROS2**, **Docker**, dan **WSL2**.
 
-Sistem ini dirancang untuk mendukung teknologi mutakhir drone autonomous modern:
-*   **Perception & Machine Learning:** Integrasi modul kamera cerdas untuk deteksi target, presisi landing, dan penghindaran rintangan berbasis AI/ML.
-*   **Autopilot (ArduPilot):** Menggunakan sistem autopilot kelas dunia untuk navigasi dan penstabil penerbangan fisik maupun SITL.
-*   **MAVROS:** Jembatan komunikasi berkinerja tinggi yang menerjemahkan protokol MAVLink ke dalam ekosistem ROS2 secara real-time.
-
-Dengan metode kontainerisasi (Docker), Anda tidak perlu khawatir merusak sistem komputer Anda atau pusing menginstal puluhan dependensi robotika yang rumit. Semuanya sudah dikemas rapi dan siap dijalankan.
+Sistem ini didukung oleh:
+*   **Autopilot (ArduPilot):** Navigasi dan penstabil penerbangan (fisik maupun SITL).
+*   **MAVROS:** Jembatan penerjemah protokol MAVLink ke dalam ekosistem ROS2 secara real-time.
 
 ---
 
 ## Daftar Isi
-
-### BAGIAN I: PENGENALAN & KONSEP
-1. [Konsep Dasar Bagi Pemula](#1-konsep-dasar-bagi-pemula)
-2. [Arsitektur Sistem (Bagaimana Semua Saling Terhubung)](#2-arsitektur-sistem-bagaimana-semua-saling-terhubung)
-
-#### BAGIAN II: PERSIAPAN & INSTALASI (SETUP)
-3. [Prasyarat & Persiapan Sistem Windows](#3-prasyarat--persiapan-sistem-windows)
-4. [Panduan Instalasi Langkah-demi-Langkah (Zero to Hero)](#4-panduan-instalasi-langkah-demi-langkah-zero-to-hero)
-   - [Langkah 1: Setup WSL2 & WSLg](#langkah-1-setup-wsl2--wslg)
-   - [Langkah 2: Instalasi Docker Engine (Native di WSL)](#langkah-2-instalasi-docker-engine-native-di-wsl)
-   - [Langkah 3: Clone Repositori & Jalankan Kontainer (dev / sbc)](#langkah-3-clone-repositori--jalankan-kontainer-dev--sbc)
-   - [Langkah 4: Eksekusi dan Verifikasi](#langkah-4-eksekusi-dan-verifikasi)
-
-### BAGIAN III: ALUR KERJA HARIAN (DAILY WORKFLOW)
-5. [Alur Kerja Harian (Daily Workflow)](#5-alur-kerja-harian-daily-workflow)
-6. [Koneksi dengan Autopilot SITL & Mission Planner](#6-koneksi-dengan-autopilot-sitl--mission-planner)
-7. [Panduan Manajemen Perintah Docker](#7-panduan-manajemen-perintah-docker)
-8. [Panduan Khusus Deployment ke SBC (Raspberry Pi)](docs/sbc_deployment.md)
-
-### BAGIAN IV: MANIFESTO PROYEK DRONE AUTONOMOUS (STRUKTUR & ARSITEKTUR)
-8. [Struktur Direktori & Mekanisme Berbagi File (Volume Mount)](#8-struktur-direktori--mekanisme-berbagi-file-volume-mount)
-9. [Arsitektur Software Drone: Monolitik vs Modular](#9-arsitektur-software-drone-monolitik-vs-modular)
-10. [Panduan Pembuatan & Pengembangan ROS2 Package](#10-panduan-pembuatan--pengembangan-ros2-package)
+1. [Prasyarat & Setup Cepat](#1-prasyarat--setup-cepat)
+2. [Alur Kerja Harian](#2-alur-kerja-harian)
+3. [Koneksi dengan Autopilot SITL & Mission Planner](#3-koneksi-dengan-autopilot-sitl--mission-planner)
+4. [Cheat Sheet Perintah ROS 2 & MAVROS](#4-cheat-sheet-perintah-ros-2--mavros)
+5. [Struktur Direktori & Mekanisme Volume Mount](#5-struktur-direktori--mekanisme-volume-mount)
+6. [Deskripsi Skrip Kontrol (`vtol_control`)](#6-deskripsi-skrip-kontrol-vtol_control)
+7. [Deployment ke SBC (Raspberry Pi)](#7-deployment-ke-sbc-raspberry-pi)
 
 ---
 
-## 1. Konsep Dasar Bagi Pemula
+## 1. Prasyarat & Setup Cepat
 
-Sebelum masuk ke instalasi teknis, mari kita pahami istilah-istilah utama yang akan sering Anda gunakan:
+### Prasyarat
+Sebelum memulai, pastikan sistem Anda telah memiliki:
+*   **WSL2 (Ubuntu)** - Khusus pengguna Windows.
+*   **Docker Engine** & **Docker Compose** terinstal dan berjalan.
 
-*   **WSL2 (Windows Subsystem for Linux 2):** Fitur Windows yang memungkinkan Anda menjalankan sistem operasi Linux (Ubuntu) secara native di dalam Windows tanpa perlu dual-boot atau menggunakan VirtualBox yang lambat.
-*   **WSLg (WSL GUI):** Subsistem WSL yang otomatis meneruskan tampilan grafis aplikasi Linux ke Windows. Berkat ini, simulator 3D seperti Gazebo bisa tampil di Windows Anda.
-*   **Docker:** Bayangkan Docker seperti "kotak bekal" yang sudah berisi makanan lengkap. Di dunia software, Docker mengemas sistem operasi Linux mini beserta semua library ROS2 dan Gazebo ke dalam satu paket (**Image**). Saat dijalankan, paket ini menjadi **Container** yang terisolasi dari sistem utama PC Anda.
-*   **ROS2 (Robot Operating System 2):** Bukan sistem operasi seperti Windows atau Linux, melainkan sebuah framework/middleware. ROS2 menyediakan pipa komunikasi (disebut **Topics**, **Services**, dan **Actions**) agar program-program kecil (disebut **Nodes**) seperti program sensor, kamera, dan kontrol motor dapat saling bertukar data dengan mudah.
-*   **MAVLink & MAVROS:**
-    *   *MAVLink* adalah bahasa protokol komunikasi standar yang digunakan oleh Flight Controller drone (seperti Pixhawk dengan firmware ArduPilot atau PX4).
-    *   *MAVROS* adalah program penerjemah di ROS2 yang menerjemahkan bahasa MAVLink menjadi bahasa ROS2 (Topics), sehingga Anda bisa mengontrol drone lewat script ROS2.
-*   **Perception & Machine Learning:** Sistem kecerdasan drone yang bertugas mengolah input citra dari sensor kamera onboard (menggunakan pustaka seperti OpenCV, PyTorch, atau YOLO) untuk mengenali lingkungan sekitar secara dinamis, melakukan navigasi visual, atau mendarat presisi pada target.
-*   **SITL (Software In The Loop):** Simulator autopilot drone yang berjalan di komputer. Autopilot mengira ia sedang terbang di drone asli, padahal ia hanya menerima sensor buatan dan mengirim perintah motor ke lingkungan simulasi.
+### Setup Cepat (Quick Start)
+Buka terminal WSL2/Linux Anda, lalu jalankan perintah berikut:
 
----
-
-## 2. Arsitektur Sistem (Bagaimana Semua Saling Terhubung)
-
-Diagram berikut menjelaskan bagaimana komponen perangkat lunak di Windows, WSL2, dan di dalam kontainer Docker (PC vs Raspberry Pi) saling berkomunikasi:
-
-```mermaid
-graph TD
-    subgraph WH ["Windows Host (PC/Laptop)"]
-        MP["Mission Planner / SITL Autopilot"]
-    end
-
-    subgraph HW ["Host Environment (PC vs Raspberry Pi)"]
-        Docker["Docker Engine"]
-    end
-
-    subgraph DC ["Docker Containers"]
-        subgraph DF ["vtol_dev (PC - Target: dev)"]
-            ROS2_Dev["ROS 2 Desktop (GUI/RViz)"] <--> MAVROS_Dev["Node MAVROS"]
-        end
-        subgraph DS ["vtol_sbc (SBC - Target: sbc)"]
-            ROS2_Sbc["ROS 2 Base (Lightweight)"] <--> MAVROS_Sbc["Node MAVROS"]
-        end
-    end
-
-    MP <-->|Komunikasi Jaringan TCP| MAVROS_Dev
-    MP <-->|Koneksi Serial/IP Fisik| MAVROS_Sbc
-```
-
----
-
-## 3. Prasyarat & Persiapan Sistem Windows
-
-Untuk memastikan simulasi 3D berjalan dengan lancar, pastikan PC/Laptop Anda memenuhi spesifikasi berikut:
-
-### Spesifikasi Perangkat Keras
-| Komponen | Spesifikasi Minimum |
-| :--- | :--- |
-| **CPU** | Intel Core i5 / AMD Ryzen 5 (Generasi 8+) |
-| **RAM** | 8 GB |
-| **Storage** | 10 GB ruang kosong (SSD sangat disarankan) |
-
-### Langkah Persiapan di Windows (Sebelum Mulai)
-1.  **Update Driver VGA NVIDIA (Khusus pengguna NVIDIA):**
-    *   Unduh dan instal driver resmi terbaru melalui aplikasi NVIDIA GeForce Experience atau website resmi NVIDIA.
-    *   **Catatan Kritis:** Cukup instal driver di Windows. Jangan pernah mengunduh/menginstal driver NVIDIA untuk Linux di dalam terminal Ubuntu WSL Anda! WSL akan otomatis menjembatani akses ke driver Windows tersebut.
-
----
-
-## 4. Panduan Instalasi Langkah-demi-Langkah (Zero to Hero)
-
-Silakan buka komputer Anda dan ikuti panduan instalasi di bawah ini secara perlahan.
-
-### Langkah 1: Setup WSL2 & WSLg
-1.  Buka **Windows Search**, ketik `powershell`, klik kanan pada **Windows PowerShell**, lalu pilih **Run as Administrator**.
-2.  Ketik perintah berikut untuk menginstal WSL2 secara otomatis (secara default akan mengunduh Ubuntu):
-    ```powershell
-    wsl --install
-    ```
-3.  Setelah selesai, lakukan pembaruan sistem WSL untuk memastikan sistem grafis (WSLg) terbaru telah terpasang:
-    ```powershell
-    wsl --update
-    ```
-4.  **Restart PC/Laptop Anda.**
-5.  Setelah PC menyala kembali, buka menu Start Windows, cari dan jalankan aplikasi bernama **Ubuntu**.
-6.  Terminal Ubuntu pertama kali akan meminta Anda memasukkan **Username** dan **Password** baru untuk sistem Linux Anda. Catat password ini karena akan digunakan saat menjalankan perintah `sudo`!
-
----
-
-### Langkah 2: Instalasi Docker Engine (Native di WSL)
-> [!NOTE]
-> Kami sengaja tidak menggunakan **Docker Desktop** karena aplikasi tersebut cukup berat dan sering menimbulkan konflik routing jaringan dengan WSL2. Kita akan menginstal Docker Engine asli Linux langsung di dalam terminal Ubuntu Anda agar performanya jauh lebih cepat.
-
-Buka terminal **Ubuntu (WSL)** Anda, lalu salin dan jalankan perintah-perintah berikut (Anda akan diminta memasukkan password Linux yang Anda buat di Langkah 1):
-
-```bash
-# 1. Perbarui daftar paket aplikasi & instal peralatan dasar
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl gnupg lsb-release
-
-# 2. Buat folder untuk menyimpan kunci keamanan Docker
-sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-
-# 3. Daftarkan repositori resmi Docker ke dalam sistem Ubuntu Anda
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-# 4. Instal Docker Engine dan plugin Docker Compose
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# 5. Beri izin user Anda agar bisa menjalankan Docker tanpa harus mengetik 'sudo' terus-menerus
-sudo usermod -aG docker $USER
-```
-
-> [!IMPORTANT]
-> **Tutup terminal Ubuntu Anda (ketik `exit` atau klik tombol X), lalu buka kembali aplikasi Ubuntu.** Langkah ini wajib dilakukan agar izin grup docker yang baru saja kita tambahkan aktif.
-
-Untuk memastikan Docker sudah berjalan dengan benar, ketik:
-```bash
-docker ps
-```
-Jika tidak muncul pesan error dan terminal menampilkan daftar tabel kosong, berarti Docker Anda telah aktif!
-
----
-
-### Langkah 3: Clone Repositori & Jalankan Kontainer (dev / sbc)
-1.  **Clone Repositori (Menggunakan SSH):**
-    Buka terminal **Ubuntu (WSL)** Anda, lalu unduh kode repositori pengembangan ini menggunakan SSH key (nama folder menggunakan tilda `~`):
+1.  **Clone Repositori:**
     ```bash
     git clone git@github.com:IPB-Robotic-Club/vtol_ros2.git ~/vtol-dev
     cd ~/vtol-dev
     ```
-2.  **Membangun Image Kontainer (Sesuai Kebutuhan):**
-    *   **Untuk Pengembangan di PC/Laptop (Rekomendasi Utama):**
-        Secara umum untuk mem-build target development gunakan:
-        ```bash
-        docker compose build dev
-        ```
-    *   **Untuk Deployment di Raspberry Pi (Target: sbc):**
-        ```bash
-        docker compose build sbc
-        ```
-3.  **Menjalankan Kontainer:**
-    *   **Untuk PC/Laptop:**
-        Secara umum untuk menjalankan kontainer development gunakan:
-        ```bash
-        docker compose up -d dev
-        ```
-    *   **Untuk Raspberry Pi (SBC):**
-        ```bash
-        docker compose up -d sbc
-        ```
-
----
-
-### Langkah 4: Eksekusi dan Verifikasi
-Untuk memverifikasi bahwa kontainer berhasil terpasang dan siap digunakan:
-
-1.  **Masuk ke dalam kontainer yang menyala:**
-    *   **Kontainer PC/Laptop:**
-        ```bash
-        docker exec -it vtol_dev bash
-        ```
-    *   **Kontainer Raspberry Pi (SBC):**
-        ```bash
-        docker exec -it vtol_sbc bash
-        ```
-2.  **Cek Deteksi IP Windows Host (Khusus PC/Laptop):**
-    Di dalam kontainer, jalankan:
+2.  **Build Image & Jalankan Kontainer:**
     ```bash
-    echo $WIN_IP
+    # Membangun image pengembangan (dev)
+    docker compose build dev
+
+    # Menyalakan kontainer di latar belakang
+    docker compose up -d dev
     ```
-    *Terminal harus mencetak alamat IP Gateway Windows Anda (misal: `172.x.x.x`).*
+3.  **Masuk ke Lingkungan Kontainer:**
+    ```bash
+    docker exec -it vtol_dev bash
+    ```
 
 ---
 
-## 5. Alur Kerja Harian (Daily Workflow)
+## 2. Alur Kerja Harian
 
-Bagaimana cara menggunakan lingkungan pengembangan ini setiap harinya? Ini adalah urutan langkah yang perlu Anda lakukan saat ingin mulai bekerja:
+Gunakan urutan perintah berikut saat ingin mulai bekerja sehari-hari:
 
-1.  **Buka Terminal Ubuntu WSL.**
-2.  **Pastikan Service Docker Menyala:**
-    WSL2 terkadang tidak otomatis menyalakan Docker saat Windows baru menyala. Jalankan perintah ini untuk memastikan layanan Docker aktif:
+1.  **Nyalakan Layanan Docker (jika belum menyala):**
     ```bash
     sudo service docker start
     ```
-3.  **Masuk ke Folder Project & Tarik Update Terbaru:**
-    Lakukan `git pull origin main` setiap hari agar Anda selalu mendapatkan pembaruan file dan dockerfile terbaru dari repositori utama:
+2.  **Masuk & Tarik Pembaruan Kode:**
     ```bash
-    cd ~/vtol-dev
-    git pull origin main
+    cd ~/vtol-dev && git pull origin main
     ```
-4.  **Nyalakan Kontainer:**
-    *   *Untuk PC/Laptop:* `docker compose up -d dev`
-    *   *Untuk Raspberry Pi:* `docker compose up -d sbc`
-5.  **Masuk ke Dalam Lingkungan Kontainer Linux ROS2:**
-    *   *Untuk PC/Laptop:* `docker exec -it vtol_dev bash`
-    *   *Untuk Raspberry Pi:* `docker exec -it vtol_sbc bash`
-6.  **Setelah Selesai Bekerja:**
-    Keluar dari kontainer dengan mengetik `exit`, lalu matikan kontainer Docker Anda agar tidak memakan memori RAM laptop Anda di latar belakang:
+3.  **Nyalakan & Masuk Kontainer:**
     ```bash
+    docker compose up -d dev
+    docker exec -it vtol_dev bash
+    ```
+4.  **Matikan Kontainer (setelah selesai bekerja):**
+    ```bash
+    exit # keluar dari terminal kontainer
     docker compose down
     ```
 
 ---
 
-## 6. Koneksi dengan Autopilot SITL & Mission Planner
+## 3. Koneksi dengan Autopilot SITL & Mission Planner
 
-Untuk menguji simulasi terbang drone VTOL Anda secara autonomous, kita dapat menyambungkan ROS2 di dalam Docker langsung dengan simulator internal di **Mission Planner**.
+> [!TIP]
+> **Setup SITL Simulator:** Jika Anda belum memasang simulator SITL di PC/Host Anda, ikuti panduan instalasi dan konfigurasinya pada **[Panduan Setup SITL untuk Uji Coba](docs/setup_sitl.md)**.
+
+Untuk menguji simulasi terbang drone VTOL secara autonomous, hubungkan ROS2 di dalam Docker dengan simulator internal di **Mission Planner** (Windows Host):
 
 ```
 +----------------------------------------+          +-----------------------------------------+
@@ -253,66 +91,76 @@ Untuk menguji simulasi terbang drone VTOL Anda secara autonomous, kita dapat men
 +----------------------------------------+          +-----------------------------------------+
 ```
 
-Langkah-langkah koneksi:
-
 1.  **Nyalakan SITL di Mission Planner (Windows):**
-    *   Buka aplikasi **Mission Planner** di Windows Anda.
-    *   Masuk ke tab menu **Simulation** di bagian atas.
-    *   Klik tombol ikon wahana **Plane** atau **QuadPlane** (VTOL).
-    *   Mission Planner akan mengunduh firmware secara otomatis, memulai simulator penerbangan SITL secara mandiri, dan langsung tersambung secara otomatis (*Auto-connect*). Anda **tidak perlu menginput IP address manual** di langkah ini karena semuanya sudah ditangani langsung oleh antarmuka Mission Planner.
-2.  **Jalankan Jembatan MAVROS di Kontainer Docker (WSL):**
-    *   Buka terminal Ubuntu WSL Anda dan masuk ke kontainer:
-        ```bash
-        docker exec -it vtol_dev bash
-        ```
-    *   Jalankan node MAVROS untuk tersambung ke simulator di Windows menggunakan port MAVLink TCP bawaan (biasanya `5762` or `5760`):
-        ```bash
-        ros2 run mavros mavros_node --ros-args -p fcu_url:="tcp://$WIN_IP:5762"
-        ```
-3.  **Verifikasi Konektivitas Topik ROS2:**
-    *   Buka tab terminal Ubuntu WSL baru (biarkan MAVROS tetap menyala di terminal pertama).
-    *   Masuk kembali ke dalam kontainer:
-        ```bash
-        docker exec -it vtol_dev bash
-        ```
-    *   Untuk memantau topik aktif dan memverifikasi data sensor autopilot yang masuk, gunakan perintah pencarian status telemetri yang terdapat pada panduan di [panduan_perintah.md](docs/panduan_perintah.md). Jika status `connected` bernilai `True`, berarti program kontrol ROS2 di Docker sudah tersambung sepenuhnya dengan simulasi drone di Windows.
-
----
-
-## 7. Panduan Manajemen Perintah Docker
-
-Berikut adalah perintah-perintah dasar Docker Compose untuk mengelola kontainer VTOL Anda:
-
-*   **Membangun Ulang Image:**
-    *   *Untuk PC/Laptop:* `docker compose build dev`
-    *   *Untuk Raspberry Pi:* `docker compose build sbc`
-*   **Menjalankan Kontainer:**
-    *   *Untuk PC/Laptop:* `docker compose up -d dev`
-    *   *Untuk Raspberry Pi:* `docker compose up -d sbc`
-*   **Masuk ke Kontainer:**
-    *   *Untuk PC/Laptop:* `docker exec -it vtol_dev bash`
-    *   *Untuk Raspberry Pi:* `docker exec -it vtol_sbc bash`
-*   **Menghentikan Kontainer:**
+    *   Buka **Mission Planner**.
+    *   Buka tab **Simulation**, lalu klik ikon wahana **Plane** atau **QuadPlane** (VTOL). Wahana simulator akan mulai secara mandiri dan langsung terhubung (*auto-connect*).
+2.  **Jalankan MAVROS di Kontainer Docker (WSL):**
+    Di dalam kontainer `vtol_dev`, jalankan perintah MAVROS untuk menyambung ke simulator Windows Host:
     ```bash
-    docker compose down
+    ros2 run mavros mavros_node --ros-args -p fcu_url:="tcp://$WIN_IP:5762"
+    ```
+3.  **Verifikasi Konektivitas:**
+    Di terminal kontainer baru, jalankan perintah telemetri berikut. Jika status `connected` bernilai `True`, koneksi berhasil tersambung:
+    ```bash
+    ros2 topic echo /mavros/state --once
     ```
 
-Untuk deployment ke komputer drone fisik (SBC ARM64) seperti Raspberry Pi atau NVIDIA Jetson, Anda dapat melakukan setup awal, git clone via SSH, dan melakukan build secara native langsung pada Raspberry Pi. 
+---
 
-Panduan lengkap langkah demi langkah dapat diakses di:
-👉 **[Panduan Khusus Deployment ke SBC (Raspberry Pi)](docs/sbc_deployment.md)**
+## 4. Cheat Sheet Perintah ROS 2 & MAVROS
+
+Jalankan perintah-perintah ini di dalam terminal kontainer Docker Anda:
+
+### A. Pengelolaan Proses & Pembersihan (Kill)
+Jika proses ROS2/MAVROS menggantung di latar belakang, bersihkan dengan perintah:
+```bash
+# Menghentikan semua proses node ROS2 & MAVROS sekaligus
+pkill -f -9 "vtol|mavros|ros2"
+
+# Memeriksa apakah masih ada sisa proses aktif
+ps aux | grep -E "vtol|mavros|ros2"
+```
+
+### B. Kompilasi Workspace
+Wajib dijalankan setiap kali Anda memodifikasi script Python, file launch, atau konfigurasi di dalam folder `src/vtol_control`:
+```bash
+cd /home/pilot/workspace
+colcon build --packages-select vtol_control
+source install/setup.bash
+```
+
+### C. Menjalankan Kontrol & Node Misi
+*   **Opsi A: Jalankan MAVROS & Core Node (Background/Senyap):**
+    ```bash
+    ros2 launch vtol_control vtol_core.launch.py
+    ```
+*   **Opsi B: Jalankan MAVROS, Core, & HUD Printer Bersamaan:**
+    ```bash
+    ros2 launch vtol_control vtol_core.launch.py show_hud:=true
+    ```
+*   **Opsi C: Jalankan Menu Launcher CLI Interaktif (Mudah & Rekomendasi):**
+    ```bash
+    ros2 run vtol_control menu_launcher
+    ```
+*   **Opsi D: Jalankan HUD Status Drone Terpisah:**
+    ```bash
+    ros2 run vtol_control vehicle_status
+    ```
+
+### D. Pemantauan Telemetri
+*   **Cek Daftar Node Aktif:** `ros2 node list`
+*   **Cek Daftar Topik Aktif:** `ros2 topic list`
+*   **Cek Input Radio Remote (RC):** `ros2 topic echo /mavros/rc/in`
+*   **Cek Ketinggian & Koordinat Lokal:** `ros2 topic echo /mavros/local_position/pose`
+*   **Cek Status Baterai:** `ros2 topic echo /mavros/battery`
 
 ---
 
-## 8. Struktur Direktori & Mekanisme Berbagi File (Volume Mount)
+## 5. Struktur Direktori & Mekanisme Volume Mount
 
-Bagi pemula, konsep penyimpanan Docker terkadang membingungkan. Jika Anda menghapus kontainer, apakah file kode Anda akan hilang? **Jawabannya: Tidak!**
-
-Kami menggunakan fitur bernama **Volume Mount** (atau bind mount) yang menjembatani folder di komputer asli Anda dengan folder di dalam kontainer.
-
-### Pemetaan Folder
-*   Folder fisik di komputer Anda: `~/vtol-dev/workspace`
-*   Terhubung langsung ke folder di dalam kontainer: `/home/pilot/workspace`
+Folder kode Anda di-mount langsung menggunakan fitur **Volume Mount** Docker:
+*   Folder di WSL/Host Anda: `~/vtol-dev/workspace`
+*   Terhubung langsung ke folder kontainer: `/home/pilot/workspace`
 
 ```
   KOMPUTER ANDA (WSL)                 KONTAINER DOCKER
@@ -321,71 +169,27 @@ Kami menggunakan fitur bernama **Volume Mount** (atau bind mount) yang menjembat
  │  ├── Dockerfile      │            │                      │
  │  ├── docker-compose  │            │                      │
  │  └── workspace/  ◄───┼──(Jembatan)┼───► workspace/       │
- │       └── main.py    │            │       └── main.py    │
  └──────────────────────┘            └──────────────────────┘
 ```
-
-### Keuntungan Utama:
-Anda bisa membuka VS Code di Windows, mengedit file python di dalam folder `~/vtol-dev/workspace`, dan seketika itu juga file tersebut akan terupdate di dalam kontainer Docker Anda untuk dijalankan menggunakan ROS2! Anda tidak perlu mengetik kode menggunakan editor terminal yang menyulitkan seperti `nano` or `vi`.
+**Keuntungan:** Anda bisa mengedit kode dengan nyaman menggunakan VS Code di Windows Host, dan perubahannya akan langsung terupdate di dalam kontainer Docker.
 
 ---
 
-## 9. Arsitektur Software Drone: Monolitik vs Modular
+## 6. Deskripsi Skrip Kontrol (`vtol_control`)
 
-Saat merancang arsitektur sistem kendali drone autonomous secara *full stack* (dilengkapi kamera navigasi AI + kontrol penerbangan MAVROS), **sangat tidak disarankan menyatukan seluruh kode dalam satu package tunggal (Monolitik)**. Pendekatan terbaik adalah memecahnya menjadi beberapa package modular yang saling berkomunikasi melalui topik ROS2.
+Package **`vtol_control`** di dalam folder **[workspace/src/vtol_control/vtol_control/](workspace/src/vtol_control/vtol_control/)** berisi skrip-skrip berikut:
 
-### Mengapa Harus Modular?
-1. **Pemisahan Peran (Separation of Concerns):** Menjaga agar kode navigasi terbang (`vtol_control`), pengolahan kamera AI (`vtol_perception`), dan visualisasi/simulasi (`vtol_simulation`) terpisah satu sama lain.
-2. **Efisiensi Deployment SBC (Raspberry Pi):** Saat dipasang pada komputer drone fisik, Anda hanya perlu mentransfer package navigasi dan sensor. File berat simulator 3D bisa diabaikan untuk menghemat RAM dan memori.
-3. **Ketahanan Sistem (Failsafe):** Jika modul visi komputer berbasis Deep Learning mengalami error/crash, sistem kontrol penerbangan utama tetap berjalan mandiri dan dapat mengeksekusi prosedur pendaratan darurat (*Return-to-Launch*).
-
-### Rekomendasi Struktur Workspace Modular (Kasus: ArUco Precision Landing)
-
-Berikut adalah struktur direktori workspace ideal (`~/vtol-dev/workspace/src/`) untuk sistem drone autonomous yang menggunakan **ArUco Marker** untuk presisi pendaratan:
-
-```text
-workspace/
-└── src/
-    ├── vtol_msgs/                  <-- [Package Custom Message]
-    │   └── msg/
-    │       └── ArucoMarkerPose.msg # Mendefinisikan koordinat X, Y, Z marker & ID ArUco
-    │
-    ├── vtol_perception/            <-- [Package Visi Komputer / ML]
-    │   ├── vtol_perception/
-    │   │   ├── __init__.py
-    │   │   └── aruco_detector.py   # Node Python (OpenCV) untuk mendeteksi ArUco dari kamera,
-    │   │                           # menghitung 3D pose, lalu mem-publish topik '/vtol/aruco_pose'
-    │   └── package.xml             # Dependensi: rclpy, cv_bridge, v4l2_camera, vtol_msgs
-    │
-    ├── vtol_control/               <-- [Package Otak Kendali & Navigasi]
-    │   ├── vtol_control/
-    │   │   ├── __init__.py
-    │   │   └── precision_landing.py # Node untuk membaca '/vtol/aruco_pose', menghitung aksi
-    │   │                            # koreksi terbang, lalu mengirimkan setpoint ke MAVROS
-    │   └── package.xml              # Dependensi: rclpy, mavros_msgs, vtol_msgs
-    │
-    └── vtol_bringup/               <-- [Package Saklar / Launch Configuration]
-        └── launch/
-            └── autonomous_landing.launch.py # Menyalakan driver kamera, MAVROS, detector,
-                                             # dan kontroler sekaligus secara otomatis
-```
-
-### Alur Aliran Data (Data Flow):
-1. **`v4l2_camera`** atau Gazebo kamera mengirimkan gambar mentah (`sensor_msgs/msg/Image`) ke topik `/camera/image_raw`.
-2. **`vtol_perception` (Node `aruco_detector`)** mengambil gambar tersebut, memprosesnya dengan OpenCV ArUco, menghitung translasi 3D target, lalu menyiarkan hasilnya (`vtol_msgs/msg/ArucoMarkerPose`) ke topik `/vtol/aruco_pose`.
-3. **`vtol_control` (Node `precision_landing`)** mendengarkan topik tersebut, menjalankan kontroler penyesuaian posisi (misal PID), lalu mem-publish koordinat pendaratan presisi ke **MAVROS** via topik `/mavros/setpoint_position/local` atau mengirim perintah pendaratan MAVLink.
+*   **[vtol_base.py](workspace/src/vtol_control/vtol_control/vtol_base.py)**: Skrip dasar (*base node class*) yang membungkus fungsi utilitas navigasi reusable (state monitoring, helper `takeoff`, `hover`, `land`, `abort_flight`).
+*   **[vtol_core.py](workspace/src/vtol_control/vtol_control/vtol_core.py)**: Node monitor telemetri. Berjalan di background untuk mencatat perubahan koneksi, status arming, mode terbang, dan meminta data rate 10Hz dari autopilot.
+*   **[menu_launcher.py](workspace/src/vtol_control/vtol_control/menu_launcher.py)**: Program menu CLI interaktif untuk memilih dan menjalankan modul pengujian atau misi.
+*   **[vehicle_status.py](workspace/src/vtol_control/vtol_control/vehicle_status.py)**: Visualizer HUD telemetri (Tabel status mode, arming, baterai, ketinggian) di terminal.
+*   **[test_arm.py](workspace/src/vtol_control/vtol_control/test_arm.py)**: Skrip uji coba sederhana untuk fitur arming/disarming drone.
+*   **[mission_hover.py](workspace/src/vtol_control/vtol_control/mission_hover.py)**: Skrip misi autonomous lepas landas, hover beberapa detik, lalu mendarat otomatis.
+*   **[mission_maneuver.py](workspace/src/vtol_control/vtol_control/mission_maneuver.py)**: Skrip misi autonomous lepas landas, maju/mundur, lalu mendarat otomatis.
 
 ---
 
-## 10. Konsep Pengembangan ROS2 Package (Teori)
+## 7. Deployment ke SBC (Raspberry Pi)
 
-Di dalam ekosistem ROS2, semua pengembangan kode (baik berupa node, launch file, maupun custom message) **harus dilakukan di dalam sebuah Package (paket)**.
-
-### Mengapa Harus Menggunakan Package?
-1. **Struktur yang Terstandarisasi**: ROS2 menggunakan sistem build seperti `colcon` (menggunakan `ament_cmake` atau `ament_python`) untuk mengatur bagaimana kode dikompilasi, dipaketkan, dan diinstal ke dalam sistem robot. Tanpa package, ROS2 tidak dapat mengenali script python atau biner C++ Anda sebagai node yang valid.
-2. **Manajemen Dependensi**: Setiap package memiliki file manifest `package.xml` yang mendeklarasikan library pihak ketiga atau package ROS2 lain yang dibutuhkannya (misal `rclpy`, `mavros_msgs`). Hal ini memudahkan pelacakan dependensi saat kode dideploy ke lingkungan baru (misalnya ke drone fisik / SBC).
-3. **Pendaftaran Executable (Entry Points)**: Dalam package Python ROS2, executable didaftarkan di dalam file `setup.py` pada bagian `entry_points`. Hal ini memungkinkan kita untuk memanggil node menggunakan perintah `ros2 run <nama_package> <nama_node>` atau menyertakannya dalam launch file secara modular.
-
-Dengan menggunakan arsitektur berbasis package, kode kendali drone Anda akan tetap bersih, terorganisir, dan sangat mudah untuk dideploy ke berbagai perangkat target (SITL laptop maupun pendamping drone fisik).
-
----
+Untuk melakukan deployment kode secara fisik ke komputer drone pendamping (SBC ARM64 seperti Raspberry Pi/Jetson), ikuti panduan langkah demi langkahnya di:
+👉 **[Panduan Deployment ke SBC (Raspberry Pi)](docs/sbc_deployment.md)**

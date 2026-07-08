@@ -10,7 +10,7 @@ Sistem ini terdiri dari tiga komponen utama yang bekerja secara berlapis:
 
 1. **Flight Controller Unit (FCU) / Autopilot**: Otak fisik drone (seperti Pixhawk yang menjalankan firmware ArduPilot/PX4). FCU menangani stabilisasi motor secara langsung, pembacaan sensor dasar (IMU, GPS, Kompas), dan kalkulasi navigasi level rendah.
 2. **MAVROS**: Jembatan (*bridge*) middleware yang menerjemahkan data dari protokol **MAVLink** (bahasa komunikasi autopilot) menjadi **Topik dan Service ROS 2**, dan sebaliknya.
-3. **ROS 2 Node (Program Anda)**: Program logika cerdas (seperti pemantau status atau modul AI) yang berjalan di komputer pendamping (*companion computer* seperti Raspberry Pi di drone fisik, atau WSL2 di laptop).
+3. **ROS 2 Node (Program Anda)**: Program logika cerdas (seperti pemantau status `vtol_core` atau skrip misi autonomous `mission_hover`) yang berjalan di komputer pendamping (*companion computer* seperti Raspberry Pi di drone fisik, atau WSL2 di laptop).
 
 ---
 

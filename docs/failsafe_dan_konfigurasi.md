@@ -4,15 +4,15 @@ Dokumen ini menjelaskan arsitektur sistem pemantauan dan pengelolaan koneksi pad
 
 ---
 
-## 1. Manajemen Konfigurasi Koneksi (`fcu_url.txt`)
+## 1. Manajemen Konfigurasi Koneksi (`vtol_config.yaml`)
 
-Untuk mempermudah perpindahan antara koneksi **Simulasi (TCP)** dan **Drone Fisik (Serial)** tanpa perlu mengganti perintah di terminal, MAVROS membaca konfigurasi dari sebuah file text.
+Untuk mempermudah perpindahan antara koneksi **Simulasi (TCP)** dan **Drone Fisik (Serial)** tanpa perlu mengganti perintah di terminal, MAVROS membaca konfigurasi dari sebuah berkas YAML.
 
-*   **Lokasi File Config:** **[fcu_url.txt](../workspace/src/vtol_control/config/fcu_url.txt)**
-*   **Cara Penggunaan:** Cukup edit file tersebut dan pilih baris yang ingin diaktifkan (hilangkan tanda `#` pada baris tersebut).
-    *   **TCP Mode (SITL):** `tcp://127.0.0.1:5762`
-    *   **Serial Mode (Pixhawk fisik):** `/dev/ttyACM0:921600`
-*   **Mekanisme Launch:** Saat Anda memanggil `ros2 launch`, file launch **[vtol_core.launch.py](../workspace/src/vtol_control/launch/vtol_core.launch.py)** akan membaca file `fcu_url.txt` secara otomatis di latar belakang, mem-parsing isinya, dan langsung menyambungkan MAVROS menggunakan alamat tersebut.
+*   **Lokasi Berkas Config:** **[vtol_config.yaml](../workspace/src/vtol_control/config/vtol_config.yaml)**
+*   **Cara Penggunaan:** Cukup edit berkas tersebut dan ubah nilai parameter `active_profile` ke opsi yang diinginkan.
+    *   `active_profile: "tcp"` untuk **TCP Mode (SITL):** `tcp://127.0.0.1:5762` (lihat **[Panduan Setup SITL untuk Uji Coba](setup_sitl.md)** jika Anda belum memasang simulator SITL).
+    *   `active_profile: "serial"` untuk **Serial Mode (Pixhawk fisik):** `/dev/ttyACM0:921600`
+*   **Mekanisme Launch:** Saat Anda memanggil `ros2 launch`, file launch **[vtol_core.launch.py](../workspace/src/vtol_control/launch/vtol_core.launch.py)** akan memanggil modul **[config_reader.py](../workspace/src/vtol_control/vtol_control/config_reader.py)** untuk membaca berkas `vtol_config.yaml` secara otomatis di latar belakang, mem-parsing isinya, dan langsung menyambungkan MAVROS menggunakan alamat tersebut.
 
 ---
 
@@ -33,7 +33,7 @@ Node **[vtol_core.py](../workspace/src/vtol_control/vtol_control/vtol_core.py)**
 
 ## 3. Cara Menjalankan Program (Execution Modes)
 
-Setelah melakukan perubahan alamat koneksi di `fcu_url.txt`, lakukan kompilasi workspace terlebih dahulu di terminal kontainer Docker:
+Setelah melakukan perubahan profil koneksi di `vtol_config.yaml`, lakukan kompilasi workspace terlebih dahulu di terminal kontainer Docker:
 ```bash
 cd /home/pilot/workspace && colcon build --packages-select vtol_control
 source install/setup.bash

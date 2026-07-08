@@ -1,0 +1,31 @@
+# Konfigurasi Koneksi Autopilot VTOL
+# Pilih profil aktif yang ingin digunakan untuk koneksi MAVROS (ArduPilot/PX4)
+
+# Profil yang tersedia:
+# - tcp: Simulasi SITL ArduPilot / Mission Planner (default port: 5762)
+# - serial: Koneksi fisik Pixhawk ke Companion Computer (Raspberry Pi) via USB/Serial (default: /dev/ttyACM0 pada baudrate 921600)
+
+active_profile: "tcp"
+
+profiles:
+  tcp:
+    fcu_url: "tcp://127.0.0.1:5762"
+  serial:
+    fcu_url: "/dev/ttyACM0:921600"
+
+# Parameter PID untuk Centering ArUco
+pid_centering:
+  kp_roll: 5.0          # Proportional gain untuk Roll (mengoreksi deviasi X)
+  ki_roll: 0.2          # Integral gain untuk Roll
+  kd_roll: 8.0          # Derivative gain untuk Roll (untuk redam overshoot)
+  kp_pitch: 5.0         # Proportional gain untuk Pitch (mengoreksi deviasi Y)
+  ki_pitch: 0.2         # Integral gain untuk Pitch
+  kd_pitch: 8.0         # Derivative gain untuk Pitch (untuk redam overshoot)
+  max_override: 30      # Deviasi maksimum dari 1500 (nilai RC aman: [1470, 1530])
+  error_threshold: 0.08 # Batas toleransi error (8% dari setengah ukuran layar)
+  centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan
+  marker_lost_timeout: 3.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
+  takeoff_altitude: 1.5    # Ketinggian lepas landas otonom (meter) sebelum centering
+
+
+

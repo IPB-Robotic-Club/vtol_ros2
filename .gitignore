@@ -23,3 +23,8 @@ htmlcov/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Log File
+workspace/mission_centering.log
+workspace/aruco_vision.log
+workspace/centering_data.csv

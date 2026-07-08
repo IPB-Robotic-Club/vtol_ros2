@@ -30,6 +30,7 @@ setup(
             'menu_launcher = vtol_control.menu_launcher:main',
             'mission_hover = vtol_control.mission_hover:main',
             'mission_maneuver = vtol_control.mission_maneuver:main',
+            'mission_centering = vtol_control.mission_centering:main',
         ],
     },
 )
