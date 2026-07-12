@@ -238,6 +238,7 @@ class ArucoReceiverNode(Node):
 
                     # Visualisasi GUI Lokal
                     if self.show_gui:
+                        self._draw_gui_overlay(frame, count, detections)
                         cv2.imshow("Webots ArUco Detection Stream", frame)
                         if cv2.waitKey(1) & 0xFF == ord('q'):
                             self.get_logger().info("Jendela visualisasi ditutup pengguna.")
@@ -267,6 +268,56 @@ class ArucoReceiverNode(Node):
             pass
         if self.show_gui:
             cv2.destroyAllWindows()
+
+    def _draw_gui_overlay(self, frame, count, detections):
+        """Gambar overlay informatif di GUI: status bar & info per marker."""
+        h, w = frame.shape[:2]
+
+        # ── Status bar di pojok kiri atas ──────────────────────────────────
+        n_markers = len(detections)
+        status_color = (0, 220, 0) if n_markers > 0 else (0, 80, 220)
+        status_text = f"Frame #{count}  |  Marker Terdeteksi: {n_markers}"
+        cv2.rectangle(frame, (0, 0), (w, 30), (0, 0, 0), -1)           # bar hitam
+        cv2.putText(frame, status_text, (8, 21),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, status_color, 2, cv2.LINE_AA)
+
+        # ── Info per marker ────────────────────────────────────────────────
+        for det in detections:
+            marker_id = det['id']
+            cx, cy = det['center']
+            norm_ex = (cx - w / 2.0) / (w / 2.0)
+            norm_ey = (cy - h / 2.0) / (h / 2.0)
+
+            # Titik tengah marker
+            cx_i, cy_i = int(cx), int(cy)
+            cv2.circle(frame, (cx_i, cy_i), 5, (0, 255, 255), -1)
+
+            # Bounding-box warna sesuai apakah di tengah frame atau tidak
+            on_center = abs(norm_ex) < 0.15 and abs(norm_ey) < 0.15
+            box_color = (0, 255, 0) if on_center else (0, 165, 255)
+
+            # Teks overlay: ID (besar), koordinat, error
+            lines = [
+                (f"ID: {marker_id}", 0.9, (0, 255, 0), 2),
+                (f"px ({cx_i}, {cy_i})",   0.55, (255, 255, 255), 1),
+                (f"ex={norm_ex:+.3f}  ey={norm_ey:+.3f}", 0.55, (0, 220, 255), 1),
+            ]
+            line_h = 24
+            text_y = cy_i - 10 - len(lines) * line_h
+            text_y = max(text_y, 35)    # jangan sampai keluar frame atas
+
+            for text, scale, color, thickness in lines:
+                (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
+                tx = max(4, min(cx_i - tw // 2, w - tw - 4))
+                # shadow tipis untuk keterbacaan
+                cv2.putText(frame, text, (tx + 1, text_y + 1),
+                            cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0), thickness + 1, cv2.LINE_AA)
+                cv2.putText(frame, text, (tx, text_y),
+                            cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
+                text_y += line_h
+
+            # Garis dari teks ke titik tengah marker
+            cv2.line(frame, (cx_i, cy_i - 5), (cx_i, text_y - line_h + 5), box_color, 1, cv2.LINE_AA)
 
     def convert_cv_to_ros_image(self, cv_img):
         """
