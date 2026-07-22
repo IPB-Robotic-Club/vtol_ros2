@@ -19,9 +19,10 @@ profiles:
 # bisa connect tanpa perlu akses langsung ke FCU/SITL.
 #
 # Format gcs_url:
-#   udp-l://0.0.0.0:<port>  →  MAVROS listen/bind di port ini (GCS connect ke sini)
-#   udp://<ip>:<port>@      →  MAVROS push ke IP/port GCS secara aktif
-#   ""                      →  Nonaktifkan forwarding (string kosong)
+# Format gcs_url yang valid di MAVROS:
+#   udp://:14550@          →  MAVROS listen/bind di port ini (GCS connect ke sini) — trailing '@' = server mode
+#   udp://<ip>:<port>      →  MAVROS push ke IP/port GCS secara aktif (client mode)
+#   ""                     →  Nonaktifkan forwarding (string kosong)
 #
 # Rekomendasi port:
 #   14550  →  port standar GCS (QGroundControl / Mission Planner)
@@ -30,9 +31,10 @@ profiles:
 mavlink_forward:
   # SITL (tcp profile): MAVROS sudah konek ke FCU via TCP.
   # Buka UDP listen di 14550 supaya QGC di host/laptop lain bisa konek.
+  # Format: udp://:PORT@  (@ di akhir = server/listen mode)
   tcp:
     enabled: true
-    gcs_url: "udp-l://0.0.0.0:14550"
+    gcs_url: "udp://:14550@"
 
   # Hardware (serial profile): Companion Computer konek langsung ke Pixhawk.
   # Kirim telemetry ke laptop GCS via IP statis.
