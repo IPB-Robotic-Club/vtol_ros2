@@ -97,16 +97,19 @@ class PIDController:
         self.last_dt = 0.0
 
 
-def apply_smooth_deadzone(u_raw, deadzone, band=2.0):
+def apply_min_kick(u_raw, deadzone_kick):
     """
-    Kompensasi deadzone RC dengan transisi linier kontinu di dekat nol.
-    Mencegah osilasi bang-bang yang terjadi saat pakai hard cut-off.
+    Kompensasi deadzone RC: selalu tambahkan kick minimum jika ada error.
+    Tidak seperti smooth_deadzone, pendekatan ini SELALU memastikan output
+    melewati deadzone hardware—berapapun kecilnya u_raw.
+
+    Formula: output = u_raw + sign(u_raw) * deadzone_kick
+    Setara dengan mode 'linear' dari smooth_deadzone, tapi berlaku
+    untuk semua besar error (tidak ada zona amplifikasi).
     """
-    if abs(u_raw) < band:
-        # Interpolasi kemiringan curam tapi kontinu (tidak ada loncatan)
-        return u_raw * ((deadzone + band) / band)
-    else:
-        return u_raw + math.copysign(deadzone, u_raw)
+    if abs(u_raw) < 1e-6:
+        return 0.0
+    return u_raw + math.copysign(deadzone_kick, u_raw)
 
 
 class MissionCenteringNode(VtolBaseNode):
@@ -169,6 +172,7 @@ class MissionCenteringNode(VtolBaseNode):
                 "center_x,center_y,norm_ex,norm_ey,dist,alt,"
                 "pid_dt,p_roll,i_roll,d_roll,raw_roll,final_roll,rc_roll,"
                 "p_pitch,i_pitch,d_pitch,raw_pitch,final_pitch,rc_pitch,"
+                "p_yaw,i_yaw,d_yaw,raw_yaw,final_yaw,rc_yaw,"
                 "rc_throttle,stable_dur\n"
             )
             self.csv_file.flush()
@@ -193,7 +197,11 @@ class MissionCenteringNode(VtolBaseNode):
         self.last_center_x = -1.0
         self.last_center_y = -1.0
         self.last_marker_id = -1
-        self.yaw_error = 0.0
+        self.yaw_error = 0.0          # Raw yaw error dari TF (sebelum filter)
+        self.filtered_yaw_error = 0.0 # Yaw error setelah low-pass filter
+        # Alpha low-pass filter yaw: kecil = lebih smooth, lebih lambat.
+        # 0.15 untuk meredam noise ±9.7° dari ArUco pose estimation
+        self.yaw_lp_alpha = 0.15
         self.loop_iter = 0
 
         self.stable_start_time = None
@@ -337,24 +345,35 @@ class MissionCenteringNode(VtolBaseNode):
         if self.last_marker_id != -1:
             try:
                 trans = self.tf_buffer.lookup_transform(
-                    'camera_link', 
-                    f'aruco_marker_{self.last_marker_id}', 
+                    'camera_link',
+                    f'aruco_marker_{self.last_marker_id}',
                     rclpy.time.Time()
                 )
                 q = trans.transform.rotation
-                self.yaw_error = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+                raw_yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+                # Fix angle wrapping: hitung shortest-path angular difference
+                # agar PID tidak melihat error loncat dari +179° ke -179° (=358°)
+                diff = raw_yaw - self.filtered_yaw_error
+                # Normalisasi diff ke [-π, π]
+                diff = (diff + math.pi) % (2 * math.pi) - math.pi
+                # Low-pass filter: meredam noise ±9.7° dari ArUco pose estimation
+                self.filtered_yaw_error += self.yaw_lp_alpha * diff
+                # Normalisasi hasil filter ke [-π, π]
+                self.filtered_yaw_error = (self.filtered_yaw_error + math.pi) % (2 * math.pi) - math.pi
+                self.yaw_error = self.filtered_yaw_error
+
             except Exception as e:
-                pass
+                # TF belum tersedia atau marker hilang — pertahankan yaw_error terakhir
+                self.write_warn(f"[YAW] TF lookup gagal (marker_id={self.last_marker_id}): {e}")
 
         if distance_error <= self.error_threshold and abs(self.yaw_error) <= self.yaw_error_threshold:
             # Di dalam toleransi: netralkan Roll/Pitch/Yaw, lepas throttle ke LOITER
+            # CATATAN: PID TIDAK di-reset agar integral mempertahankan posisi hold
             self.rc_channels[0] = 1500
             self.rc_channels[1] = 1500
             self.rc_channels[2] = 1500  # Netral throttle -> LOITER maintain altitude
             self.rc_channels[3] = 1500
-            self.pid_roll.reset()
-            self.pid_pitch.reset()
-            self.pid_yaw.reset()
 
             u_roll_raw = 0.0
             u_roll = 0.0
@@ -376,10 +395,12 @@ class MissionCenteringNode(VtolBaseNode):
             u_pitch_raw = self.pid_pitch.update(self.norm_error_y, current_time)
             u_yaw_raw = self.pid_yaw.update(self.yaw_error, current_time)
 
-            # Kompensasi deadzone RC dengan smooth transition (band=0.5 untuk pendaratan kuat)
-            u_roll = apply_smooth_deadzone(u_roll_raw, self.deadzone_bias, band=0.5)
-            u_pitch = apply_smooth_deadzone(u_pitch_raw, self.deadzone_bias, band=0.5)
-            u_yaw = apply_smooth_deadzone(u_yaw_raw, self.deadzone_bias, band=0.5)
+            # Kompensasi deadzone RC: selalu tambahkan kick minimum
+            # apply_min_kick memastikan output SELALU melewati deadzone hardware
+            # walau norm_error kecil (kasus frame 320x240 dimana raw PID hanya ~0.5)
+            u_roll  = apply_min_kick(u_roll_raw,  self.deadzone_bias)
+            u_pitch = apply_min_kick(u_pitch_raw, self.deadzone_bias)
+            u_yaw   = apply_min_kick(u_yaw_raw,   self.deadzone_bias)
 
             # Clamp ke max_override
             u_roll = max(min(u_roll, self.max_override), -self.max_override)
@@ -389,7 +410,9 @@ class MissionCenteringNode(VtolBaseNode):
             self.rc_channels[0] = int(1500 + u_roll)
             self.rc_channels[1] = int(1500 + u_pitch)
             self.rc_channels[2] = 1500  # Netral throttle -> LOITER maintain altitude
-            self.rc_channels[3] = int(1500 + u_yaw)
+            # SIGN TERBALIK: error negatif -> u_yaw negatif -> 1500 - (-n) = > 1500 = YAW KANAN
+            # Terbukti dari CSV: RC < 1500 menyebabkan error yaw makin negatif (arah salah)
+            self.rc_channels[3] = int(1500 - u_yaw)
 
         # Log diagnostik ke file teks per iterasi
         log_str = (
@@ -430,6 +453,8 @@ class MissionCenteringNode(VtolBaseNode):
                     f"{u_roll_raw:.4f},{u_roll:.4f},{self.rc_channels[0]},"
                     f"{self.pid_pitch.p_term:.4f},{self.pid_pitch.i_term:.4f},{self.pid_pitch.d_term:.4f},"
                     f"{u_pitch_raw:.4f},{u_pitch:.4f},{self.rc_channels[1]},"
+                    f"{self.pid_yaw.p_term:.4f},{self.pid_yaw.i_term:.4f},{self.pid_yaw.d_term:.4f},"
+                    f"{u_yaw_raw:.4f},{u_yaw:.4f},{self.rc_channels[3]},"
                     f"{self.rc_channels[2]},{stable_dur:.3f}\n"
                 )
                 self.csv_file.flush()
@@ -523,13 +548,18 @@ class MissionCenteringNode(VtolBaseNode):
             target_dt = 0.05  # 20 Hz
             elapsed_in_loop = self.get_current_time() - current_time
             sleep_time = target_dt - elapsed_in_loop
-            
-            if sleep_time > 0.0:
-                spin_start = self.get_current_time()
-                while rclpy.ok() and (self.get_current_time() - spin_start) < sleep_time:
-                    rclpy.spin_once(self, timeout_sec=0.01)
-            else:
-                rclpy.spin_once(self, timeout_sec=0.0)
+
+            try:
+                if sleep_time > 0.0:
+                    spin_start = self.get_current_time()
+                    while rclpy.ok() and (self.get_current_time() - spin_start) < sleep_time:
+                        rclpy.spin_once(self, timeout_sec=0.01)
+                else:
+                    rclpy.spin_once(self, timeout_sec=0.0)
+            except (KeyboardInterrupt, RuntimeError):
+                # Ctrl+C datang di tengah spin_once executor coroutine:
+                # catch di sini lalu re-raise agar main() menjalankan safe_exit()
+                raise KeyboardInterrupt
 
         self.centering_active = False
 

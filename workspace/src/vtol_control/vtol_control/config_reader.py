@@ -124,3 +124,49 @@ def get_takeoff_config():
     return default_takeoff
 
 
+def get_gcs_url():
+    """
+    Membaca berkas vtol_config.yaml untuk mendapatkan gcs_url dari blok mavlink_forward
+    sesuai profil yang aktif. Digunakan MAVROS sebagai GCS bridge untuk forward
+    telemetry MAVLink via UDP ke Ground Control Station eksternal.
+
+    Return:
+        str: gcs_url jika forwarding diaktifkan (enabled: true), atau string kosong
+             jika forwarding dimatikan atau tidak dikonfigurasi.
+    """
+    package_name = 'vtol_control'
+    try:
+        package_share_dir = get_package_share_directory(package_name)
+    except Exception:
+        package_share_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    src_config_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', package_name, 'config', 'vtol_config.yaml'))
+    installed_config_path = os.path.join(package_share_dir, 'config', 'vtol_config.yaml')
+    config_file_path = src_config_path if os.path.exists(src_config_path) else installed_config_path
+
+    if not os.path.exists(config_file_path):
+        print(f"Warning: Berkas konfigurasi tidak ditemukan pada {config_file_path}. GCS forwarding dinonaktifkan.")
+        return ''
+
+    try:
+        with open(config_file_path, 'r') as f:
+            config = yaml.safe_load(f)
+
+        if not config:
+            return ''
+
+        active_profile = config.get('active_profile', 'tcp')
+        forward_config = config.get('mavlink_forward', {}).get(active_profile, {})
+
+        if not forward_config.get('enabled', False):
+            print(f"Info: MAVLink GCS forwarding dinonaktifkan untuk profil '{active_profile}'.")
+            return ''
+
+        gcs_url = forward_config.get('gcs_url', '')
+        if gcs_url:
+            print(f"Info: MAVLink GCS forwarding aktif via {gcs_url} (profil: {active_profile})")
+        return gcs_url
+
+    except Exception as e:
+        print(f"Warning: Gagal membaca konfigurasi GCS forwarding dari {config_file_path}: {e}")
+        return ''

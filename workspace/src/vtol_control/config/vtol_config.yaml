@@ -3,7 +3,7 @@
 
 # Profil yang tersedia:
 # - tcp: Simulasi SITL ArduPilot / Mission Planner (default port: 5762)
-# - serial: Koneksi fisik Pixhawk ke Companion Computer (Raspberry Pi) via USB/Serial (default: /dev/ttyACM0 pada baudrate 921600)
+# - serial: Koneksi fisik Pixhawk ke Companion Computer (Raspberry Pi) via USB/Serial (default: /dev/ttyAMA0 pada baudrate 921600)
 
 active_profile: "tcp"
 
@@ -11,26 +11,54 @@ profiles:
   tcp:
     fcu_url: "tcp://127.0.0.1:5762"
   serial:
-    fcu_url: "/dev/ttyACM0:921600"
+    fcu_url: "/dev/ttyAMA0:921600"
+
+# ==============================================================================
+# Konfigurasi MAVLink UDP Forwarding (GCS Bridge)
+# MAVROS akan membuka server UDP sehingga GCS eksternal (QGC / Mission Planner)
+# bisa connect tanpa perlu akses langsung ke FCU/SITL.
+#
+# Format gcs_url:
+#   udp-l://0.0.0.0:<port>  →  MAVROS listen/bind di port ini (GCS connect ke sini)
+#   udp://<ip>:<port>@      →  MAVROS push ke IP/port GCS secara aktif
+#   ""                      →  Nonaktifkan forwarding (string kosong)
+#
+# Rekomendasi port:
+#   14550  →  port standar GCS (QGroundControl / Mission Planner)
+#   14551  →  port alternatif jika 14550 sudah dipakai QGC lokal di mesin SITL
+# ==============================================================================
+mavlink_forward:
+  # SITL (tcp profile): MAVROS sudah konek ke FCU via TCP.
+  # Buka UDP listen di 14550 supaya QGC di host/laptop lain bisa konek.
+  tcp:
+    enabled: true
+    gcs_url: "udp-l://0.0.0.0:14550"
+
+  # Hardware (serial profile): Companion Computer konek langsung ke Pixhawk.
+  # Kirim telemetry ke laptop GCS via IP statis.
+  # Ganti <GCS_IP> dengan IP laptop yang menjalankan QGroundControl.
+  serial:
+    enabled: false
+    gcs_url: "udp://192.168.1.100:14550@"
 
 # Parameter PID untuk Centering ArUco
 pid_centering:
-  kp_roll: 5.0          # Proportional gain untuk Roll (mengoreksi deviasi X)
-  ki_roll: 0.2          # Integral gain untuk Roll
-  kd_roll: 8.0          # Derivative gain untuk Roll (untuk redam overshoot)
-  kp_pitch: 5.0         # Proportional gain untuk Pitch (mengoreksi deviasi Y)
-  ki_pitch: 0.2         # Integral gain untuk Pitch
-  kd_pitch: 8.0         # Derivative gain untuk Pitch (untuk redam overshoot)
-  kp_yaw: 3.0           # Proportional gain untuk Yaw (Heading)
+  kp_roll: 15.0         # Proportional gain untuk Roll [tuned: 4.0 → 15.0, kompensasi frame 320x240 + min_kick approach]
+  ki_roll: 0.5          # Integral gain untuk Roll [tuned: 0.15 → 0.5]
+  kd_roll: 5.0          # Derivative gain untuk Roll
+  kp_pitch: 15.0        # Proportional gain untuk Pitch [tuned: 4.0 → 15.0]
+  ki_pitch: 0.5         # Integral gain untuk Pitch [tuned: 0.15 → 0.5]
+  kd_pitch: 5.0         # Derivative gain untuk Pitch
+  kp_yaw: 8.0           # Proportional gain untuk Yaw [tuned: 3.0 → 8.0]
   ki_yaw: 0.1           # Integral gain untuk Yaw
   kd_yaw: 4.0           # Derivative gain untuk Yaw
-  max_override: 30      # Deviasi maksimum dari 1500 (nilai RC aman: [1470, 1530])
-  max_yaw_override: 50  # Deviasi maksimal RC4 (Yaw) dari 1500
+  max_override: 40      # Deviasi maksimum dari 1500 untuk Roll/Pitch
+  max_yaw_override: 60  # Deviasi maksimal RC4 (Yaw) dari 1500
   yaw_error_threshold: 0.1 # Batas toleransi error Yaw dalam radian (~5.7 derajat)
-  error_threshold: 0.08 # Batas toleransi error translasi
+  error_threshold: 0.08 # Batas toleransi error translasi (norm)
   centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan
   marker_lost_timeout: 3.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
-  deadzone_bias: 25.0   # Kompensasi deadzone RC (nilai bias offset)
+  deadzone_bias: 12.0   # Minimum RC kick offset [apply_min_kick: selalu ditambahkan jika ada error]
 
 # Parameter Lepas Landas Otonom (Takeoff)
 takeoff:

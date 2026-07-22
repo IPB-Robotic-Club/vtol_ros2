@@ -12,8 +12,9 @@ def generate_launch_description():
     
     # Import and read fcu_url using config_reader
     try:
-        from vtol_control.config_reader import get_fcu_url
+        from vtol_control.config_reader import get_fcu_url, get_gcs_url
         fcu_url = get_fcu_url()
+        gcs_url = get_gcs_url()
     except ImportError:
         import sys
         # Fallback: add source directory to sys.path if not sourced
@@ -21,11 +22,13 @@ def generate_launch_description():
         if src_path not in sys.path:
             sys.path.append(src_path)
         try:
-            from vtol_control.config_reader import get_fcu_url
+            from vtol_control.config_reader import get_fcu_url, get_gcs_url
             fcu_url = get_fcu_url()
+            gcs_url = get_gcs_url()
         except Exception as e:
             print(f"Warning: Failed to import config_reader: {e}. Using default URL.")
             fcu_url = 'tcp://127.0.0.1:5762'
+            gcs_url = ''
 
     # Path to FastDDS configuration file to prevent WSL2 shared memory communication lockups
     src_fastdds_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', 'vtol_control', 'config', 'fastdds.xml'))
@@ -35,6 +38,10 @@ def generate_launch_description():
     print(f"======================================================")
     print(f" VTOL Core Launching with FCU URL: {fcu_url}")
     print(f" FastDDS Configuration File: {fastdds_path}")
+    if gcs_url:
+        print(f" MAVLink GCS Forward (UDP): {gcs_url}")
+    else:
+        print(f" MAVLink GCS Forward (UDP): Disabled")
     print(f"======================================================")
 
     # Declare Launch Argument for HUD visualization
@@ -45,16 +52,21 @@ def generate_launch_description():
     )
     show_hud = LaunchConfiguration('show_hud')
 
+    # Build MAVROS parameters — only include gcs_url if forwarding is enabled
+    mavros_params = {
+        'fcu_url': fcu_url,
+        'system_id': 255,
+    }
+    if gcs_url:
+        mavros_params['gcs_url'] = gcs_url
+
     # Launch MAVROS node - output to screen with default INFO log level to diagnose connection problems
     mavros_node = Node(
         package='mavros',
         executable='mavros_node',
         namespace='mavros',
         output='screen',
-        parameters=[{
-            'fcu_url': fcu_url,
-            'system_id': 255,
-        }],
+        parameters=[mavros_params],
         on_exit=Shutdown()
     )
 

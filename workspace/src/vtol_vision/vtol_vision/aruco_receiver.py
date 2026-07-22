@@ -179,46 +179,69 @@ class ArucoReceiverNode(Node):
                     detections = []
                     if ids is not None:
                         cv2.aruco.drawDetectedMarkers(frame, corners, ids)
-                        
-                        # Estimate pose
-                        rvecs, tvecs, _objPoints = cv2.aruco.estimatePoseSingleMarkers(
-                            corners, self.marker_length, self.camera_matrix, self.dist_coeffs
-                        )
+
+                        # Object points untuk square marker (searah jarum jam dari pojok kiri atas)
+                        half = self.marker_length / 2.0
+                        obj_pts_single = np.array([
+                            [-half,  half, 0],
+                            [ half,  half, 0],
+                            [ half, -half, 0],
+                            [-half, -half, 0],
+                        ], dtype=np.float32)
 
                         for i, marker_id in enumerate(ids.flatten()):
                             c = corners[i][0]
                             center_x = float(np.mean(c[:, 0]))
                             center_y = float(np.mean(c[:, 1]))
-                            
-                            rvec = rvecs[i][0]
-                            tvec = tvecs[i][0]
+                            img_pts = c.astype(np.float32)
+
+                            # Gunakan IPPE_SQUARE untuk menghilangkan pose flip ambiguity.
+                            # Memberikan 2 kandidat solusi + reprojection error masing-masing.
+                            # Pilih solusi dengan reprojection error terkecil.
+                            try:
+                                _, rvecs_sol, tvecs_sol, repro_errs = cv2.solvePnPGeneric(
+                                    obj_pts_single, img_pts,
+                                    self.camera_matrix, self.dist_coeffs,
+                                    flags=cv2.SOLVEPNP_IPPE_SQUARE
+                                )
+                                best_idx = int(np.argmin([e[0] for e in repro_errs]))
+                                rvec = rvecs_sol[best_idx].flatten()
+                                tvec = tvecs_sol[best_idx].flatten()
+                            except Exception:
+                                # Fallback ke estimatePoseSingleMarkers jika solvePnP gagal
+                                rvecs_fb, tvecs_fb, _ = cv2.aruco.estimatePoseSingleMarkers(
+                                    [corners[i]], self.marker_length, self.camera_matrix, self.dist_coeffs
+                                )
+                                rvec = rvecs_fb[0][0]
+                                tvec = tvecs_fb[0][0]
 
                             detections.append({
                                 'id': int(marker_id),
                                 'center': [center_x, center_y],
                                 'corners': c.tolist()
                             })
-                            
+
                             # Draw axes
                             cv2.drawFrameAxes(frame, self.camera_matrix, self.dist_coeffs, rvec, tvec, self.marker_length * 0.5)
-                            
+
                             # Broadcast TF
                             t = TransformStamped()
                             t.header.stamp = self.get_clock().now().to_msg()
                             t.header.frame_id = 'camera_link'
                             t.child_frame_id = f'aruco_marker_{int(marker_id)}'
-                            
+
                             t.transform.translation.x = float(tvec[0])
                             t.transform.translation.y = float(tvec[1])
                             t.transform.translation.z = float(tvec[2])
-                            
+
                             qx, qy, qz, qw = rotvec2quat(rvec)
                             t.transform.rotation.x = qx
                             t.transform.rotation.y = qy
                             t.transform.rotation.z = qz
                             t.transform.rotation.w = qw
-                            
+
                             self.tf_broadcaster.sendTransform(t)
+
 
                     # Publikasikan data deteksi
                     detection_msg = String()
