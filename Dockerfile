@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     libgeographiclib-dev \
     geographiclib-tools \
     sudo \
+    v4l-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Setup GeographicLib database for MAVROS
@@ -70,6 +71,7 @@ RUN apt-get update && apt-get install -y \
     libgeographiclib-dev \
     geographiclib-tools \
     sudo \
+    v4l-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Setup GeographicLib database for MAVROS
