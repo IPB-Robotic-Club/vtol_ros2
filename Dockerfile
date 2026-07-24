@@ -10,6 +10,10 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-setuptools \
     python3-colcon-common-extensions \
+    python3-opencv \
+    python3-numpy \
+    ros-jazzy-cv-bridge \
+    ros-jazzy-image-transport \
     git wget nano iproute2 \
     ros-jazzy-mavros \
     ros-jazzy-mavros-extras \
@@ -56,6 +60,10 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-setuptools \
     python3-colcon-common-extensions \
+    python3-opencv \
+    python3-numpy \
+    ros-jazzy-cv-bridge \
+    ros-jazzy-image-transport \
     git wget nano iproute2 \
     ros-jazzy-mavros \
     ros-jazzy-mavros-extras \
