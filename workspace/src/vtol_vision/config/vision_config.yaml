@@ -1,5 +1,5 @@
 # Konfigurasi Vision VTOL — ArUco Detection
-# Pilih profil aktif: "tcp" (SITL, kamera via UDP) atau "serial" (hardware Raspi, kamera /dev/video0)
+# Pilih profil aktif: "tcp" (SITL, kamera via UDP) atau "serial" (hardware Raspi, CSI camera via picamera2)
 
 active_profile: "tcp"
 
@@ -11,14 +11,17 @@ profiles:
     udp_ip: "127.0.0.1"
     udp_port: 5005
 
-  # ── Hardware Raspberry Pi ──────────────────────────────────────────────────
-  # Kamera terhubung langsung ke Raspi (USB/CSI) dan dibaca via V4L2 (cv2.VideoCapture).
+  # ── Hardware Raspberry Pi (CSI Camera via libcamera) ─────────────────────
+  # Kamera CSI (RPi Camera Module) dibaca via picamera2 (libcamera backend).
+  # Gunakan source ini untuk RPi OS Bullseye/Bookworm ke atas.
+  # Jika memakai kamera USB biasa (bukan CSI), ganti camera_source ke "v4l"
+  # dan tambahkan field: device: "/dev/video0"
   serial:
-    camera_source: "v4l"          # baca langsung dari device node
-    device: "/dev/video0"
+    camera_source: "rpicam"       # picamera2 — untuk kamera CSI RPi
     capture_width: 640
     capture_height: 480
     capture_fps: 30
+    camera_index: 0               # index kamera jika ada lebih dari satu
 
 # ── Konfigurasi ArUco (berlaku untuk semua profil) ─────────────────────────
 aruco:

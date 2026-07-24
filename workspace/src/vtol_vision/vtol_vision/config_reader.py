@@ -85,11 +85,12 @@ def get_camera_config():
     if defaults['camera_source'] == 'udp':
         defaults['udp_ip']   = profile_cfg.get('udp_ip',   defaults['udp_ip'])
         defaults['udp_port'] = profile_cfg.get('udp_port', defaults['udp_port'])
-    elif defaults['camera_source'] == 'v4l':
+    elif defaults['camera_source'] in ('v4l', 'rpicam'):
         defaults['device']         = profile_cfg.get('device',         defaults['device'])
         defaults['capture_width']  = profile_cfg.get('capture_width',  defaults['capture_width'])
         defaults['capture_height'] = profile_cfg.get('capture_height', defaults['capture_height'])
         defaults['capture_fps']    = profile_cfg.get('capture_fps',    defaults['capture_fps'])
+        defaults['camera_index']   = profile_cfg.get('camera_index',   0)
 
     # ── Baca konfigurasi ArUco (top-level 'aruco' block) ──────────────────
     aruco_cfg = cfg.get('aruco', {})

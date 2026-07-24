@@ -293,8 +293,9 @@ class ArucoReceiverNode(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
 
         # Inisialisasi camera source sesuai profil
-        self.sock    = None   # hanya untuk UDP
-        self.capture = None   # hanya untuk V4L
+        self.sock     = None   # hanya untuk UDP
+        self.capture  = None   # hanya untuk V4L2
+        self.picam2   = None   # hanya untuk rpicam (picamera2)
 
         if self.camera_source == 'udp':
             udp_ip   = self.cam_config['udp_ip']
@@ -323,6 +324,28 @@ class ArucoReceiverNode(Node):
                 f"{self.cam_config['capture_width']}x{self.cam_config['capture_height']}"
                 f"@{self.cam_config['capture_fps']}fps"
             )
+        elif self.camera_source == 'rpicam':
+            try:
+                from picamera2 import Picamera2
+            except ImportError as exc:
+                raise ImportError(
+                    "picamera2 tidak ditemukan. Install dengan: "
+                    "sudo apt install python3-picamera2"
+                ) from exc
+            cam_idx = self.cam_config.get('camera_index', 0)
+            w = self.cam_config['capture_width']
+            h = self.cam_config['capture_height']
+            self.picam2 = Picamera2(cam_idx)
+            cfg = self.picam2.create_preview_configuration(
+                main={"size": (w, h), "format": "BGR888"},
+                controls={"FrameRate": float(self.cam_config['capture_fps'])},
+            )
+            self.picam2.configure(cfg)
+            self.picam2.start()
+            self.get_logger().info(
+                f"[{self.active_profile}] RPi CSI kamera dibuka via picamera2  "
+                f"(index={cam_idx}, {w}x{h}@{self.cam_config['capture_fps']}fps)"
+            )
         else:
             raise ValueError(f"camera_source tidak dikenal: '{self.camera_source}'")
 
@@ -338,10 +361,14 @@ class ArucoReceiverNode(Node):
 
         # Pilih receive loop sesuai camera source
         self.running = True
-        loop_target = (
-            self._receive_loop_udp if self.camera_source == 'udp'
-            else self._receive_loop_v4l
-        )
+        loop_map = {
+            'udp':    self._receive_loop_udp,
+            'v4l':    self._receive_loop_v4l,
+            'rpicam': self._receive_loop_rpicam,
+        }
+        loop_target = loop_map.get(self.camera_source)
+        if loop_target is None:
+            raise ValueError(f"camera_source tidak dikenal: '{self.camera_source}'") 
         self.rx_thread = threading.Thread(target=loop_target, daemon=True)
         self.rx_thread.start()
 
@@ -578,6 +605,43 @@ class ArucoReceiverNode(Node):
             pass
 
     # ------------------------------------------------------------------
+    # Receive loop: RPi CSI Camera (profil serial / picamera2)
+    # ------------------------------------------------------------------
+
+    def _receive_loop_rpicam(self):
+        count = 0
+        while self.running:
+            try:
+                # capture_array() mengembalikan numpy array BGR (format BGR888)
+                frame = self.picam2.capture_array()
+                if frame is None:
+                    time.sleep(0.01)
+                    continue
+
+                # Pastikan array dalam format BGR (picamera2 BGR888 sudah BGR)
+                if frame.ndim == 2:                         # grayscale fallback
+                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+                elif frame.shape[2] == 4:                   # BGRA -> BGR
+                    frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+
+                count += 1
+                h, w = frame.shape[:2]
+                self.frame_w = float(w)
+                self.frame_h = float(h)
+                raw_bytes = w * h * frame.shape[2]
+
+                self._process_frame(frame, count, raw_bytes)
+
+            except Exception as e:
+                self.get_logger().error(f"[rpicam] Error: {e}")
+                time.sleep(0.05)
+
+        try:
+            self.picam2.stop()
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
     # HUD overlay (digambar sebelum JPEG encode, bukan untuk GUI window)
     # ------------------------------------------------------------------
 
@@ -656,6 +720,11 @@ class ArucoReceiverNode(Node):
         if self.capture is not None:
             try:
                 self.capture.release()
+            except Exception:
+                pass
+        if self.picam2 is not None:
+            try:
+                self.picam2.stop()
             except Exception:
                 pass
         if self.rx_thread.is_alive():
