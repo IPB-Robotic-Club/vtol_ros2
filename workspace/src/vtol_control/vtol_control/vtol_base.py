@@ -72,10 +72,10 @@ class VtolBaseNode(Node):
 
         # Subscription ke rangefinder_1 hanya aktif untuk drone real (profil 'serial')
         if self.use_rangefinder:
-            self.get_logger().info("[AltSource] Profil 'serial' terdeteksi — menggunakan RANGEFINDER_1 sebagai sumber altitude.")
+            self.get_logger().info("[AltSource] Profil 'serial' terdeteksi — menggunakan RANGEFINDER (/mavros/rangefinder/rangefinder) sebagai sumber altitude.")
             self.rangefinder_sub = self.create_subscription(
                 Range,
-                '/mavros/rangefinder_1/range',
+                '/mavros/rangefinder/rangefinder',
                 self._rangefinder_callback,
                 self.qos_telemetry
             )

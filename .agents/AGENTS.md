@@ -50,5 +50,5 @@ This document defines behavior guidelines and style rules for any AI agents work
 - **Rule**: Altitude source is switched automatically by `active_profile` in `vtol_config.yaml`:
   - `tcp` (SITL) → `local_position/pose.z` (EKF)
   - `serial` (real drone) → rangefinder topic (AGL)
-- **Note (Rangefinder Topic)**: The exact MAVROS topic for rangefinder_1 is hardware-dependent. The current placeholder is `/mavros/rangefinder_1/range`. Verify the actual topic with `ros2 topic list | grep -i range` when connected to the FC, and update the topic in `vtol_base.py` accordingly.
+- **Note (Rangefinder Topic)**: Topic MAVROS untuk rangefinder yang sudah diverifikasi dari hardware adalah `/mavros/rangefinder/rangefinder` (tipe `sensor_msgs/Range`, unit: **meter**). Topic ini sudah di-set di `vtol_base.py`. Jika ganti hardware, verifikasi ulang dengan `ros2 topic list | grep -i range`.
 
