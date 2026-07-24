@@ -26,3 +26,29 @@ This document defines behavior guidelines and style rules for any AI agents work
   - To analyze mission PID and altitude metrics: `python3 workspace/analyze.py --mode mission` (reads `mission_centering.log`).
   - To run all analysis tools at once: `python3 workspace/analyze.py --mode all`.
   - You can specify custom log paths via `--csv <path>`, `--vision-log <path>`, or `--mission-log <path>`.
+
+## 5. Code Architecture Guidelines
+
+### 5.1 Base Class vs Mission Scripts
+- **Rule**: Any functionality that is **shared across multiple nodes** (telemetry reading, altitude abstraction, arming, mode change, takeoff, land, abort) MUST live in `VtolBaseNode` (`vtol_base.py`). Mission scripts (`mission_centering.py`, `mission_hover.py`, etc.) must only contain **mission-specific logic** — they inherit shared behavior from the base class.
+- **Rule**: When adding new telemetry sources (sensors, topics) to the system, the subscription, state variable, and accessor method must be implemented in `vtol_base.py`. Mission files call the inherited accessor — they do NOT subscribe to topics directly.
+- **Reason**: Placing shared behavior in mission files leads to code duplication, inconsistency between missions, and increased maintenance burden. Any bug fix or improvement would need to be replicated across all mission files manually.
+- **Example (correct)**:
+  ```python
+  # vtol_base.py — satu tempat implementasi
+  def get_current_altitude(self) -> float:
+      if self.use_rangefinder:
+          return self.rangefinder_range if self.has_rangefinder else 0.0
+      return self.current_pose.pose.position.z if self.has_pose else 0.0
+
+  # mission_centering.py — hanya memanggil, tidak reimplementasi
+  alt = self.get_current_altitude()
+  ```
+
+### 5.2 Altitude Source
+- **Rule**: Always use `self.get_current_altitude()` (method dari `VtolBaseNode`) for reading current altitude — never read `self.current_pose.pose.position.z` directly in mission files. The base class automatically selects the correct source based on `active_profile` in `vtol_config.yaml`.
+- **Rule**: Altitude source is switched automatically by `active_profile` in `vtol_config.yaml`:
+  - `tcp` (SITL) → `local_position/pose.z` (EKF)
+  - `serial` (real drone) → rangefinder topic (AGL)
+- **Note (Rangefinder Topic)**: The exact MAVROS topic for rangefinder_1 is hardware-dependent. The current placeholder is `/mavros/rangefinder_1/range`. Verify the actual topic with `ros2 topic list | grep -i range` when connected to the FC, and update the topic in `vtol_base.py` accordingly.
+

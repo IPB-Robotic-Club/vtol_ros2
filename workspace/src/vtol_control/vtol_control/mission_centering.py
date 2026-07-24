@@ -304,7 +304,7 @@ class MissionCenteringNode(VtolBaseNode):
                 if self.csv_file:
                     try:
                         dist = math.sqrt(self.norm_error_x**2 + self.norm_error_y**2)
-                        alt  = self.current_pose.pose.position.z
+                        alt  = self.get_current_altitude()
                         self.csv_file.write(
                             f"VISION,{recv_time:.4f},{self.loop_iter},{vision_ts:.4f},"
                             f"{frame_count},{int(frame_w)},{int(frame_h)},"
@@ -325,7 +325,7 @@ class MissionCenteringNode(VtolBaseNode):
                         self.csv_file.write(
                             f"VISION_NODET,{recv_time:.4f},{self.loop_iter},{vision_ts:.4f},"
                             f"{frame_count},{int(frame_w)},{int(frame_h)},"
-                            f",,,,,{self.current_pose.pose.position.z:.3f},"
+                             f",,,,,{self.get_current_altitude():.3f},"
                             f",,,,,,,,,,,,\n"
                         )
                         self.csv_file.flush()
@@ -426,7 +426,7 @@ class MissionCenteringNode(VtolBaseNode):
             f"  Yaw  : Err={self.yaw_error:.3f} | Raw={u_yaw_raw:.2f} "
             f"(P={self.pid_yaw.p_term:.2f}, I={self.pid_yaw.i_term:.2f}, D={self.pid_yaw.d_term:.2f}) "
             f"| Final={u_yaw:.2f} -> RC={self.rc_channels[3]}\n"
-            f"  Dist={distance_error:.2f} | Alt={self.current_pose.pose.position.z:.2f}m"
+            f"  Dist={distance_error:.2f} | Alt={self.get_current_altitude():.2f}m"
         )
         if self.log_file:
             try:
@@ -439,7 +439,7 @@ class MissionCenteringNode(VtolBaseNode):
         # Log baris CSV terstruktur per iterasi PID loop
         if self.csv_file:
             try:
-                alt = self.current_pose.pose.position.z
+                alt = self.get_current_altitude()
                 pid_dt = self.pid_roll.last_dt
                 stable_dur = (current_time - self.stable_start_time) if self.stable_start_time else 0.0
                 self.csv_file.write(

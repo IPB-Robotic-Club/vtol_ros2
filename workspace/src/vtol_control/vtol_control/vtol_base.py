@@ -3,7 +3,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 from mavros_msgs.msg import State, OverrideRCIn
 from mavros_msgs.srv import SetMode, CommandBool
-from sensor_msgs.msg import BatteryState
+from sensor_msgs.msg import BatteryState, Range
 from geometry_msgs.msg import PoseStamped
 import time
 
@@ -26,6 +26,12 @@ class VtolBaseNode(Node):
             durability=DurabilityPolicy.TRANSIENT_LOCAL
         )
 
+        # Deteksi profil aktif: 'tcp' = SITL, 'serial' = drone real
+        from vtol_control.config_reader import get_active_profile
+        self._active_profile = get_active_profile()
+        # Sumber altitude: False = local_position/pose.z (SITL), True = rangefinder_1 (real)
+        self.use_rangefinder = (self._active_profile == 'serial')
+
         # Telemetry State Variables
         self.current_state = State()
         self.current_pose = PoseStamped()
@@ -34,6 +40,10 @@ class VtolBaseNode(Node):
         self.has_battery = False
         self.state_received = False
         self.last_state_time = 0.0
+
+        # Rangefinder (hanya aktif saat profil 'serial' / drone real)
+        self.rangefinder_range = 0.0
+        self.has_rangefinder = False
 
         # Buffer for RC channels: 18 channels, default 0 (no override)
         self.rc_channels = [0] * 18
@@ -59,6 +69,19 @@ class VtolBaseNode(Node):
             self._battery_callback,
             self.qos_telemetry
         )
+
+        # Subscription ke rangefinder_1 hanya aktif untuk drone real (profil 'serial')
+        if self.use_rangefinder:
+            self.get_logger().info("[AltSource] Profil 'serial' terdeteksi — menggunakan RANGEFINDER_1 sebagai sumber altitude.")
+            self.rangefinder_sub = self.create_subscription(
+                Range,
+                '/mavros/rangefinder_1/range',
+                self._rangefinder_callback,
+                self.qos_telemetry
+            )
+        else:
+            self.get_logger().info("[AltSource] Profil 'tcp' terdeteksi — menggunakan LOCAL_POSITION/POSE.Z sebagai sumber altitude.")
+            self.rangefinder_sub = None
 
         # Service clients
         self.set_mode_client = self.create_client(SetMode, '/mavros/set_mode')
@@ -89,6 +112,13 @@ class VtolBaseNode(Node):
         self.has_battery = True
         self.on_battery(msg)
 
+    def _rangefinder_callback(self, msg):
+        # Abaikan pembacaan invalid (0.0 atau di luar range sensor)
+        if msg.range > msg.min_range and msg.range < msg.max_range:
+            self.rangefinder_range = msg.range
+            self.has_rangefinder = True
+            self.on_rangefinder(msg)
+
     # Virtual callbacks to override
     def on_state(self, msg):
         pass
@@ -98,6 +128,20 @@ class VtolBaseNode(Node):
 
     def on_battery(self, msg):
         pass
+
+    def on_rangefinder(self, msg):
+        pass
+
+    def get_current_altitude(self) -> float:
+        """
+        Mengembalikan ketinggian saat ini berdasarkan profil aktif:
+        - 'tcp'    (SITL)       : local_position/pose.z (EKF)
+        - 'serial' (real drone) : rangefinder_1 range (AGL, lebih akurat untuk landing)
+        """
+        if self.use_rangefinder:
+            return self.rangefinder_range if self.has_rangefinder else 0.0
+        else:
+            return self.current_pose.pose.position.z if self.has_pose else 0.0
 
     # Reusable control functions
     def change_mode(self, mode_name):
@@ -204,7 +248,7 @@ class VtolBaseNode(Node):
                 self.abort_flight()
                 return False
                 
-            current_alt = self.current_pose.pose.position.z if self.has_pose else 0.0
+            current_alt = self.get_current_altitude()
             if current_alt >= target_altitude:
                 self.get_logger().info(f"Target altitude reached ({current_alt:.2f}m >= {target_altitude}m).")
                 return True

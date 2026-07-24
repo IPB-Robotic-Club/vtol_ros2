@@ -90,12 +90,13 @@ def generate_launch_description():
     )
 
     # Launch aruco_receiver from vtol_vision
+    # NOTE: on_exit=Shutdown() intentionally removed — if vision node crashes,
+    # mavros and vtol_core should continue running independently.
     aruco_receiver_node = Node(
         package='vtol_vision',
         executable='aruco_receiver',
         name='aruco_receiver_node',
         output='screen',
-        on_exit=Shutdown()
     )
 
     return LaunchDescription([

@@ -1,5 +1,6 @@
 import rclpy
 from vtol_control.vtol_base import VtolBaseNode
+from sensor_msgs.msg import Range
 
 class VehicleStatusPrinter(VtolBaseNode):
     def __init__(self):
@@ -51,10 +52,22 @@ class VehicleStatusPrinter(VtolBaseNode):
             x = self.current_pose.pose.position.x
             y = self.current_pose.pose.position.y
             z = self.current_pose.pose.position.z
-            pos_str = f"X: {x:7.2f} | Y: {y:7.2f} | Z (Alt): {z:7.2f}"
+            pos_str = f"X: {x:7.2f} | Y: {y:7.2f} | Z: {z:7.2f}"
         else:
             pos_str = "  WAITING FOR LOCAL POSE..."
         print(f"  {pos_str}\033[K")
+
+        # 6. Altitude (sumber tergantung profil aktif)
+        alt_source = "RANGEFINDER_1" if self.use_rangefinder else "LOCAL_POSITION"
+        alt_value  = self.get_current_altitude()
+        if self.use_rangefinder:
+            alt_ready = self.has_rangefinder
+        else:
+            alt_ready = self.has_pose
+        alt_str = f"{alt_value:7.2f} m" if alt_ready else "WAITING FOR DATA..."
+        print(f"------------------------------------------\033[K")
+        print(f" Alt Source     : {alt_source}\033[K")
+        print(f" Altitude (AGL) : {alt_str}\033[K")
         print(f"==========================================\033[K", flush=True)
 
 def main(args=None):
