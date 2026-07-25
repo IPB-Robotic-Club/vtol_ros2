@@ -57,17 +57,21 @@ class VehicleStatusPrinter(VtolBaseNode):
             pos_str = "  WAITING FOR LOCAL POSE..."
         print(f"  {pos_str}\033[K")
 
-        # 6. Altitude (sumber tergantung profil aktif)
+        # 6. Altitude Breakdown & Active Altitude
         alt_source = "RANGEFINDER_1" if self.use_rangefinder else "LOCAL_POSITION"
-        alt_value  = self.get_current_altitude()
-        if self.use_rangefinder:
-            alt_ready = self.has_rangefinder
-        else:
-            alt_ready = self.has_pose
-        alt_str = f"{alt_value:7.2f} m" if alt_ready else "WAITING FOR DATA..."
+        active_alt = self.get_current_altitude()
+
+        rf_str   = f"{self.rangefinder_range:7.2f} m" if self.has_rangefinder else "WAITING FOR DATA..."
+        pose_str = f"{self.current_pose.pose.position.z:7.2f} m" if self.has_pose else "WAITING FOR DATA..."
+        
+        alt_ready = (self.has_rangefinder if self.use_rangefinder else self.has_pose)
+        active_alt_str = f"{active_alt:7.2f} m" if alt_ready else "WAITING FOR DATA..."
+
         print(f"------------------------------------------\033[K")
-        print(f" Alt Source     : {alt_source}\033[K")
-        print(f" Altitude (AGL) : {alt_str}\033[K")
+        print(f" Rangefinder Alt: {rf_str}\033[K")
+        print(f" Local Pose Z   : {pose_str}\033[K")
+        print(f" Active Source  : {alt_source}\033[K")
+        print(f" Altitude (AGL) : {active_alt_str}\033[K")
         print(f"==========================================\033[K", flush=True)
 
 def main(args=None):

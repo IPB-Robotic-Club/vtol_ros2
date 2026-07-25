@@ -70,18 +70,17 @@ class VtolBaseNode(Node):
             self.qos_telemetry
         )
 
-        # Subscription ke rangefinder_1 hanya aktif untuk drone real (profil 'serial')
+        # Subscription ke rangefinder_1 (selalu diawasi agar telemetry rangefinder selalu tersedia)
+        self.rangefinder_sub = self.create_subscription(
+            Range,
+            '/mavros/rangefinder/rangefinder',
+            self._rangefinder_callback,
+            self.qos_telemetry
+        )
         if self.use_rangefinder:
-            self.get_logger().info("[AltSource] Profil 'serial' terdeteksi — menggunakan RANGEFINDER (/mavros/rangefinder/rangefinder) sebagai sumber altitude.")
-            self.rangefinder_sub = self.create_subscription(
-                Range,
-                '/mavros/rangefinder/rangefinder',
-                self._rangefinder_callback,
-                self.qos_telemetry
-            )
+            self.get_logger().info("[AltSource] Profil 'serial' terdeteksi — menggunakan RANGEFINDER (/mavros/rangefinder/rangefinder) sebagai sumber altitude utama.")
         else:
-            self.get_logger().info("[AltSource] Profil 'tcp' terdeteksi — menggunakan LOCAL_POSITION/POSE.Z sebagai sumber altitude.")
-            self.rangefinder_sub = None
+            self.get_logger().info("[AltSource] Profil 'tcp' terdeteksi — menggunakan LOCAL_POSITION/POSE.Z sebagai sumber altitude utama.")
 
         # Service clients
         self.set_mode_client = self.create_client(SetMode, '/mavros/set_mode')
@@ -139,7 +138,9 @@ class VtolBaseNode(Node):
         - 'serial' (real drone) : rangefinder_1 range (AGL, lebih akurat untuk landing)
         """
         if self.use_rangefinder:
-            return self.rangefinder_range if self.has_rangefinder else 0.0
+            if self.has_rangefinder:
+                return self.rangefinder_range
+            return self.current_pose.pose.position.z if self.has_pose else 0.0
         else:
             return self.current_pose.pose.position.z if self.has_pose else 0.0
 

@@ -64,7 +64,7 @@ pid_centering:
 
 # Parameter Lepas Landas Otonom (Takeoff)
 takeoff:
-  altitude: 1.5    # Ketinggian lepas landas otonom (meter) sebelum centering
+  altitude: 1    # Ketinggian lepas landas otonom (meter) sebelum centering
   throttle: 1700   # Thrust (RC3) yang digunakan saat proses lepas landas
 
 
