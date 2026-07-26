@@ -97,6 +97,7 @@ def get_pid_config():
         'kd_yaw': 4.0,
         'max_override': 100,
         'max_yaw_override': 50,
+        'max_throttle_override': 30,
         'yaw_error_threshold': 0.1,
         'error_threshold': 0.06,
         'centering_duration': 3.0,
@@ -135,19 +136,31 @@ def get_takeoff_config():
 
     default_takeoff = {
         'takeoff_altitude': 1.5,
-        'takeoff_throttle': 1700
+        'max_throttle_override': 30,
+        'takeoff_throttle': 1530
     }
 
     if os.path.exists(config_file_path):
         try:
             with open(config_file_path, 'r') as f:
                 config = yaml.safe_load(f)
-                if config and 'takeoff' in config:
-                    takeoff_data = config['takeoff']
-                    if 'altitude' in takeoff_data:
-                        default_takeoff['takeoff_altitude'] = takeoff_data['altitude']
-                    if 'throttle' in takeoff_data:
-                        default_takeoff['takeoff_throttle'] = takeoff_data['throttle']
+                if config:
+                    # Preferred fallback: pid_centering -> max_throttle_override
+                    if 'pid_centering' in config and 'max_throttle_override' in config['pid_centering']:
+                        default_takeoff['max_throttle_override'] = config['pid_centering']['max_throttle_override']
+                        default_takeoff['takeoff_throttle'] = 1500 + default_takeoff['max_throttle_override']
+
+                    # Specific takeoff block overrides
+                    if 'takeoff' in config:
+                        takeoff_data = config['takeoff']
+                        if 'altitude' in takeoff_data:
+                            default_takeoff['takeoff_altitude'] = takeoff_data['altitude']
+                        if 'max_throttle_override' in takeoff_data:
+                            default_takeoff['max_throttle_override'] = takeoff_data['max_throttle_override']
+                            default_takeoff['takeoff_throttle'] = 1500 + takeoff_data['max_throttle_override']
+                        elif 'throttle' in takeoff_data:
+                            default_takeoff['takeoff_throttle'] = takeoff_data['throttle']
+                            default_takeoff['max_throttle_override'] = takeoff_data['throttle'] - 1500
         except Exception as e:
             print(f"Warning: Gagal membaca konfigurasi takeoff dari {config_file_path}: {e}")
     

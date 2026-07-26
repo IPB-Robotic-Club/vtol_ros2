@@ -27,10 +27,13 @@ class VtolBaseNode(Node):
         )
 
         # Deteksi profil aktif: 'tcp' = SITL, 'serial' = drone real
-        from vtol_control.config_reader import get_active_profile
+        from vtol_control.config_reader import get_active_profile, get_takeoff_config
         self._active_profile = get_active_profile()
         # Sumber altitude: False = local_position/pose.z (SITL), True = rangefinder_1 (real)
         self.use_rangefinder = (self._active_profile == 'serial')
+
+        takeoff_config = get_takeoff_config()
+        self.max_throttle_override = takeoff_config.get('max_throttle_override', 30)
 
         # Telemetry State Variables
         self.current_state = State()
@@ -185,9 +188,9 @@ class VtolBaseNode(Node):
         if target_altitude is None:
             target_altitude = config.get('takeoff_altitude', 1.5)
         if throttle is None:
-            throttle = config.get('takeoff_throttle', 1700)
+            throttle = config.get('takeoff_throttle', 1500 + self.max_throttle_override)
 
-        self.get_logger().info(f"Starting Takeoff to {target_altitude}m with throttle {throttle}...")
+        self.get_logger().info(f"Starting Takeoff to {target_altitude}m with throttle {throttle} (1500 + {throttle - 1500})...")
         
         # Verify connection first
         while rclpy.ok() and not self.state_received:
@@ -319,6 +322,7 @@ class VtolBaseNode(Node):
 
             if not self.current_state.armed:
                 self.get_logger().info("Drone successfully DISARMED on ground. Landing complete!")
+                self._post_land_cleanup()
                 return True
                 
             if elapsed > timeout:
@@ -333,6 +337,24 @@ class VtolBaseNode(Node):
             rclpy.spin_once(self, timeout_sec=0.1)
             
         return False
+
+    def _post_land_cleanup(self):
+        """
+        Reset FCU ke state netral setelah landing selesai.
+        Mencegah 'Mission is stale' pada sesi arming berikutnya:
+        ArduPilot menandai mission sebagai stale jika FCU tidak di-reset
+        ke mode netral setelah LAND mode selesai.
+        """
+        self.get_logger().info("[PostLand] Mereset FCU ke mode STABILIZE...")
+        # STABILIZE tidak membutuhkan mission — menghilangkan 'mission stale' check
+        self.change_mode("STABILIZE")
+        # Pastikan semua RC override dilepas
+        self.rc_channels = [0] * 18
+        # Tunggu sebentar agar perintah mode change terkirim ke FCU
+        start = time.time()
+        while rclpy.ok() and time.time() - start < 1.5:
+            rclpy.spin_once(self, timeout_sec=0.1)
+        self.get_logger().info("[PostLand] Cleanup selesai. FCU siap untuk sesi berikutnya.")
 
     def abort_flight(self):
         """Immediately aborts flight, releases control, and commands LAND."""

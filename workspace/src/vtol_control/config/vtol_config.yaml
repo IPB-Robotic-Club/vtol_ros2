@@ -56,6 +56,7 @@ pid_centering:
   kd_yaw: 4.0           # Derivative gain untuk Yaw
   max_override: 40      # Deviasi maksimum dari 1500 untuk Roll/Pitch
   max_yaw_override: 60  # Deviasi maksimal RC4 (Yaw) dari 1500
+  max_throttle_override: 0 # Deviasi maksimal RC3 (Throttle) dari 1500
   yaw_error_threshold: 0.1 # Batas toleransi error Yaw dalam radian (~5.7 derajat)
   error_threshold: 0.08 # Batas toleransi error translasi (norm)
   centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan
@@ -65,7 +66,7 @@ pid_centering:
 # Parameter Lepas Landas Otonom (Takeoff)
 takeoff:
   altitude: 1    # Ketinggian lepas landas otonom (meter) sebelum centering
-  throttle: 1700   # Thrust (RC3) yang digunakan saat proses lepas landas
+  max_throttle_override: 100 # Deviasi maksimal RC3 (Throttle) dari 1500 (1500 + x atau 1500 - x)
 
 
 

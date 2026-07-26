@@ -1,13 +1,23 @@
 import rclpy
 from rclpy.signals import SignalHandlerOptions
 from vtol_control.vtol_base import VtolBaseNode
+from vtol_control.config_reader import get_pid_config
 import time
 
 class MissionManeuverNode(VtolBaseNode):
     def __init__(self):
         # Enable the background 10Hz RC publishing timer for overrides
         super().__init__('mission_maneuver_node', enable_rc_loop=True)
-        self.get_logger().info("Mission Maneuver Node Started!")
+        
+        # Load deviation limits from config
+        pid_config = get_pid_config()
+        self.max_override = pid_config.get('max_override', 40)
+        self.max_yaw_override = pid_config.get('max_yaw_override', 60)
+        self.max_throttle_override = pid_config.get('max_throttle_override', 30)
+
+        self.get_logger().info(
+            f"Mission Maneuver Node Started! (max_override={self.max_override}, max_yaw_override={self.max_yaw_override}, max_throttle_override={self.max_throttle_override})"
+        )
 
     def execute_maneuver(self, action_name, roll=1500, pitch=1500, yaw=1500, throttle=1500, duration=2.0):
         self.get_logger().info(f"Executing Maneuver: {action_name} (Roll: {roll}, Pitch: {pitch}, Yaw: {yaw}, Throttle: {throttle}) for {duration}s...")
@@ -61,43 +71,47 @@ class MissionManeuverNode(VtolBaseNode):
         if not self.hover(duration_seconds=3.0):
             return
 
+        # Calculate RC values using max_override, max_yaw_override, and max_throttle_override from config
+        roll_right = 1500 + self.max_override
+        roll_left = 1500 - self.max_override
+        pitch_forward = 1500 - self.max_override
+        pitch_backward = 1500 + self.max_override
+        yaw_right = 1500 + self.max_yaw_override
+        yaw_left = 1500 - self.max_yaw_override
+        throttle_up = 1500 + self.max_throttle_override
+        throttle_down = 1500 - self.max_throttle_override
+
         # 3. Roll demonstration (Right, then Left)
-        # Roll Right (RC1 = 1600)
-        if not self.execute_maneuver("ROLL RIGHT", roll=1600, duration=1.5):
+        if not self.execute_maneuver("ROLL RIGHT", roll=roll_right, duration=1.5):
             return
         # Stabilize
         if not self.hover(duration_seconds=2.0):
             return
-        # Roll Left (RC1 = 1400)
-        if not self.execute_maneuver("ROLL LEFT", roll=1400, duration=1.5):
+        if not self.execute_maneuver("ROLL LEFT", roll=roll_left, duration=1.5):
             return
         # Stabilize
         if not self.hover(duration_seconds=2.0):
             return
 
         # 4. Pitch demonstration (Forward, then Backward)
-        # Pitch Forward (RC2 = 1400)
-        if not self.execute_maneuver("PITCH FORWARD", pitch=1400, duration=1.5):
+        if not self.execute_maneuver("PITCH FORWARD", pitch=pitch_forward, duration=1.5):
             return
         # Stabilize
         if not self.hover(duration_seconds=2.0):
             return
-        # Pitch Backward (RC2 = 1600)
-        if not self.execute_maneuver("PITCH BACKWARD", pitch=1600, duration=1.5):
+        if not self.execute_maneuver("PITCH BACKWARD", pitch=pitch_backward, duration=1.5):
             return
         # Stabilize
         if not self.hover(duration_seconds=2.0):
             return
 
         # 5. Yaw demonstration (Yaw Right, then Yaw Left)
-        # Yaw Right (RC4 = 1650)
-        if not self.execute_maneuver("YAW RIGHT", yaw=1650, duration=2.0):
+        if not self.execute_maneuver("YAW RIGHT", yaw=yaw_right, duration=2.0):
             return
         # Stabilize
         if not self.hover(duration_seconds=2.0):
             return
-        # Yaw Left (RC4 = 1350)
-        if not self.execute_maneuver("YAW LEFT", yaw=1350, duration=2.0):
+        if not self.execute_maneuver("YAW LEFT", yaw=yaw_left, duration=2.0):
             return
         # Stabilize
         if not self.hover(duration_seconds=2.0):
