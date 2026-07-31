@@ -28,3 +28,9 @@ Thumbs.db
 workspace/mission_centering.log
 workspace/aruco_vision.log
 workspace/centering_data.csv
+
+# Something
+core*
+
+# Param
+*mav*

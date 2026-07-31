@@ -5,7 +5,7 @@
 # - tcp: Simulasi SITL ArduPilot / Mission Planner (default port: 5762)
 # - serial: Koneksi fisik Pixhawk ke Companion Computer (Raspberry Pi) via USB/Serial (default: /dev/ttyAMA0 pada baudrate 921600)
 
-active_profile: "tcp"
+active_profile: "serial"
 
 profiles:
   tcp:
@@ -33,14 +33,14 @@ mavlink_forward:
   # Buka UDP listen di 14550 supaya QGC di host/laptop lain bisa konek.
   # Format: udp://:PORT@  (@ di akhir = server/listen mode)
   tcp:
-    enabled: true
+    enabled: false
     gcs_url: "udp://:14550@"
 
   # Hardware (serial profile): Companion Computer (Raspberry Pi) konek langsung ke Pixhawk.
   # MAVROS di RPi listen di port 14550 — GCS (QGroundControl) konek ke IP Raspberry Pi:14550.
   # Tidak perlu hardcode IP apapun di sini. Cukup arahkan QGC ke IP RPi saat di lapangan.
   serial:
-    enabled: false
+    enabled: true
     gcs_url: "udp://:14550@"
 
 # Parameter PID untuk Centering ArUco
@@ -65,6 +65,7 @@ pid_centering:
 
 # Parameter Lepas Landas Otonom (Takeoff)
 takeoff:
+
   altitude: 1    # Ketinggian lepas landas otonom (meter) sebelum centering
   max_throttle_override: 100 # Deviasi maksimal RC3 (Throttle) dari 1500 (1500 + x atau 1500 - x)
 

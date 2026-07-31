@@ -7,6 +7,7 @@ import time
 import os
 import math
 import rclpy
+import yaml
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from rclpy.node import Node
 from sensor_msgs.msg import Image
@@ -278,10 +279,35 @@ class ArucoReceiverNode(Node):
         self.camera_matrix = np.array(cam_mat_list, dtype=np.float32).reshape(3, 3)
         self.dist_coeffs   = np.array(self.cam_config['dist_coeffs'], dtype=np.float32)
 
+        # Check if local calibration exists in workspace (Option 1)
+        calib_path = "/home/pilot/workspace/camera_calibration.yaml"
+        if os.path.exists(calib_path):
+            try:
+                with open(calib_path, 'r') as f:
+                    calib_data = yaml.safe_load(f)
+                    self.camera_matrix = np.array(calib_data['camera_matrix'], dtype=np.float32).reshape(3, 3)
+                    self.dist_coeffs   = np.array(calib_data['distortion_coefficients'], dtype=np.float32)
+                    self.get_logger().info(f"Berhasil memuat kalibrasi kamera dari: {calib_path}")
+            except Exception as e:
+                self.get_logger().warn(f"Gagal memuat kalibrasi dari {calib_path}, menggunakan config bawaan: {e}")
+
         # Setup ArUco Dictionary & Parameters (OpenCV 4.6.0 API)
         dict_id = getattr(cv2.aruco, self.aruco_dict_name, cv2.aruco.DICT_7X7_50)
         self.aruco_dict   = cv2.aruco.Dictionary_get(dict_id)
         self.aruco_params = cv2.aruco.DetectorParameters_create()
+        
+        # Optimasi parameter deteksi agar sangat stabil dan tahan pantulan cahaya/kerutan:
+        self.aruco_params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
+        self.aruco_params.adaptiveThreshWinSizeMin = 3
+        self.aruco_params.adaptiveThreshWinSizeMax = 45
+        self.aruco_params.adaptiveThreshWinSizeStep = 4
+        self.aruco_params.adaptiveThreshConstant = 7
+        
+        # Toleransi ekstra terhadap kerutan spanduk (garis tepi tidak lurus sempurna akibat berkerut)
+        self.aruco_params.polygonalApproxAccuracyRate = 0.05
+        
+        # Toleransi ekstra terhadap pantulan cahaya (memperbolehkan koreksi bit biner yang bocor/rusak karena kilauan)
+        self.aruco_params.errorCorrectionRate = 0.8
 
         # Resolusi kamera (diupdate saat frame pertama diterima)
         self.frame_w = 640.0
@@ -428,9 +454,34 @@ class ArucoReceiverNode(Node):
         """Jalankan deteksi ArUco, annotasi frame, publish ROS + update MJPEG buffer."""
         global _latest_jpeg, _detection_state
 
+        # Lakukan undistort untuk menghilangkan distorsi lensa (Opsi 1) - Aktifkan jika kalibrasi presisi
+        # frame = cv2.undistort(frame, self.camera_matrix, self.dist_coeffs)
+
+        # Konversi ke Grayscale dan gunakan CLAHE untuk meredam pantulan cahaya (glare) & bayangan
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        gray_eq = clahe.apply(gray)
+
+        # 1. Coba deteksi normal pada gambar hasil pre-processing
         corners, ids, rejected = cv2.aruco.detectMarkers(
-            frame, self.aruco_dict, parameters=self.aruco_params
+            gray_eq, self.aruco_dict, parameters=self.aruco_params
         )
+
+        # 2. Coba deteksi dengan membalikkan warna frame (Inverted) pada gambar hasil pre-processing
+        gray_inv = cv2.bitwise_not(gray_eq)
+        corners_inv, ids_inv, rejected_inv = cv2.aruco.detectMarkers(
+            gray_inv, self.aruco_dict, parameters=self.aruco_params
+        )
+
+        # 3. Gabungkan hasil deteksi dari kedua mode
+        if ids_inv is not None and len(ids_inv) > 0:
+            if ids is not None and len(ids) > 0:
+                ids = np.concatenate((ids, ids_inv), axis=0)
+                corners = corners + corners_inv
+            else:
+                ids = ids_inv
+                corners = corners_inv
+
         self.write_vision_log(count, raw_bytes, frame, corners, ids, rejected)
 
         detections = []
@@ -474,7 +525,9 @@ class ArucoReceiverNode(Node):
                 detections.append({
                     'id': int(marker_id),
                     'center': [center_x, center_y],
-                    'corners': c.tolist()
+                    'corners': c.tolist(),
+                    'pose_tvec': [float(tvec[0]), float(tvec[1]), float(tvec[2])],
+                    'pose_rvec': [float(rvec[0]), float(rvec[1]), float(rvec[2])]
                 })
 
                 # Draw axes
@@ -667,10 +720,15 @@ class ArucoReceiverNode(Node):
             cx_i, cy_i = int(cx), int(cy)
             cv2.circle(frame, (cx_i, cy_i), 5, (0, 255, 255), -1)
 
+            # Menampilkan koordinat 3D di HUD jika tersedia
+            x_m, y_m, z_m = 0.0, 0.0, 0.0
+            if 'pose_tvec' in det:
+                x_m, y_m, z_m = det['pose_tvec']
+
             lines = [
                 (f"ID: {marker_id}", 0.9, (0, 255, 0), 2),
+                (f"XYZ: ({x_m:+.2f}, {y_m:+.2f}, {z_m:+.2f}) m", 0.55, (0, 220, 255), 1),
                 (f"px ({cx_i}, {cy_i})",   0.55, (255, 255, 255), 1),
-                (f"ex={norm_ex:+.3f}  ey={norm_ey:+.3f}", 0.55, (0, 220, 255), 1),
             ]
             line_h = 24
             text_y = cy_i - 10 - len(lines) * line_h
