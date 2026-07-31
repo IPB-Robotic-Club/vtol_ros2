@@ -616,11 +616,29 @@ class ArucoReceiverNode(Node):
             if 'pose_tvec' in det:
                 x_m, y_m, z_m = det['pose_tvec']
 
+            # Yaw error dan arahnya
+            yaw_hint = ''
+            if 'pose_rvec' in det:
+                import math
+                rvec_z = det['pose_rvec'][2]
+                # Wrap ke [-pi, pi]
+                rvec_z = (rvec_z + math.pi) % (2 * math.pi) - math.pi
+                yaw_deg = math.degrees(rvec_z)
+                if abs(rvec_z) < 0.1:
+                    yaw_hint = f"Yaw: {rvec_z:+.2f}r ({yaw_deg:+.0f}deg) OK"
+                elif rvec_z > 0:
+                    yaw_hint = f"Yaw: {rvec_z:+.2f}r ({yaw_deg:+.0f}deg) -> YAW RIGHT"
+                else:
+                    yaw_hint = f"Yaw: {rvec_z:+.2f}r ({yaw_deg:+.0f}deg) -> YAW LEFT"
+
             lines = [
                 (f"ID: {marker_id}", 0.9, (0, 255, 0), 2),
                 (f"XYZ: ({x_m:+.2f}, {y_m:+.2f}, {z_m:+.2f}) m", 0.55, (0, 220, 255), 1),
                 (f"px ({cx_i}, {cy_i})",   0.55, (255, 255, 255), 1),
             ]
+            if yaw_hint:
+                lines.append((yaw_hint, 0.5, (220, 100, 255), 1))
+
             line_h = 24
             text_y = cy_i - 10 - len(lines) * line_h
             text_y = max(text_y, 35)
@@ -637,6 +655,72 @@ class ArucoReceiverNode(Node):
             on_center = abs(norm_ex) < 0.15 and abs(norm_ey) < 0.15
             box_color = (0, 255, 0) if on_center else (0, 165, 255)
             cv2.line(frame, (cx_i, cy_i - 5), (cx_i, text_y - line_h + 5), box_color, 1, cv2.LINE_AA)
+
+            # ── FRONT heading arrow ────────────────────────────────────
+            # Project titik Y+ lokal marker (sisi depan/atas marker) ke image plane
+            # Arah Y+ dalam koordinat marker = sisi "atas" marker = depan ArUco
+            if 'pose_tvec' in det and 'pose_rvec' in det:
+                try:
+                    rvec_arr = np.array(det['pose_rvec'], dtype=np.float32).reshape(3, 1)
+                    tvec_arr = np.array(det['pose_tvec'], dtype=np.float32).reshape(3, 1)
+
+                    # Panjang panah = setengah sisi marker (proporsional)
+                    arrow_len = self.marker_length * 0.6
+
+                    # Titik asal (center marker) dan titik ujung (Y+ = arah FRONT)
+                    obj_origin = np.array([[0.0, 0.0, 0.0]], dtype=np.float32)
+                    obj_front  = np.array([[0.0, -arrow_len, 0.0]], dtype=np.float32)
+
+                    img_origin, _ = cv2.projectPoints(
+                        obj_origin, rvec_arr, tvec_arr,
+                        self.camera_matrix, self.dist_coeffs
+                    )
+                    img_front, _ = cv2.projectPoints(
+                        obj_front, rvec_arr, tvec_arr,
+                        self.camera_matrix, self.dist_coeffs
+                    )
+
+                    p_origin = tuple(img_origin[0][0].astype(int))
+                    p_front  = tuple(img_front[0][0].astype(int))
+
+                    # Clamp ke batas frame
+                    p_origin = (
+                        max(0, min(w - 1, p_origin[0])),
+                        max(0, min(h - 1, p_origin[1]))
+                    )
+                    p_front = (
+                        max(0, min(w - 1, p_front[0])),
+                        max(0, min(h - 1, p_front[1]))
+                    )
+
+                    # Gambar panah magenta tebal
+                    cv2.arrowedLine(
+                        frame, p_origin, p_front,
+                        (255, 60, 255),   # magenta
+                        3, cv2.LINE_AA, tipLength=0.35
+                    )
+                    # Shadow tipis untuk kontras
+                    cv2.arrowedLine(
+                        frame, p_origin, p_front,
+                        (0, 0, 0), 5, cv2.LINE_AA, tipLength=0.35
+                    )
+                    cv2.arrowedLine(
+                        frame, p_origin, p_front,
+                        (255, 60, 255), 3, cv2.LINE_AA, tipLength=0.35
+                    )
+
+                    # Label "FRONT" di ujung panah
+                    label = "FRONT"
+                    (lw, lh), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                    lx = max(2, min(w - lw - 2, p_front[0] - lw // 2))
+                    ly = max(lh + 4, min(h - 4, p_front[1] - 6))
+                    cv2.putText(frame, label, (lx + 1, ly + 1),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 3, cv2.LINE_AA)
+                    cv2.putText(frame, label, (lx, ly),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 255), 2, cv2.LINE_AA)
+
+                except Exception:
+                    pass  # Jika proyeksi gagal, skip saja — jangan crash
 
     # ------------------------------------------------------------------
     # ROS Image conversion

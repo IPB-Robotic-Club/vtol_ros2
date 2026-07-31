@@ -5,7 +5,7 @@
 # - tcp: Simulasi SITL ArduPilot / Mission Planner (default port: 5762)
 # - serial: Koneksi fisik Pixhawk ke Companion Computer (Raspberry Pi) via USB/Serial (default: /dev/ttyAMA0 pada baudrate 921600)
 
-active_profile: "serial"
+active_profile: "tcp"
 
 profiles:
   tcp:

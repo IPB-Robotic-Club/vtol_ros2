@@ -27,10 +27,12 @@ setup(
             'vtol_core = vtol_control.vtol_core:main',
             'vehicle_status = vtol_control.vehicle_status:main',
             'test_arm = vtol_control.test_arm:main',
+            'test_takeoff = vtol_control.test_takeoff:main',
             'menu_launcher = vtol_control.menu_launcher:main',
             'mission_hover = vtol_control.mission_hover:main',
             'mission_maneuver = vtol_control.mission_maneuver:main',
             'mission_centering = vtol_control.mission_centering:main',
+            'debug_aruco = vtol_control.mission_debug_aruco:main',
         ],
     },
 )
