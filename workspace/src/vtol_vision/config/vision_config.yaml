@@ -1,35 +1,35 @@
 # Konfigurasi Vision VTOL — ArUco Detection
-# Pilih profil aktif: "tcp" (SITL, kamera via UDP) atau "serial" (hardware Raspi via /dev/video0)
+# Pilih profil aktif: "sitl" (Simulasi Webots via UDP) atau "raspi" (Hardware Raspi via UDP / pi5_streamer)
 
-active_profile: "tcp"
+active_profile: "sitl"
+#active_profile: "raspi"
 
 profiles:
-  # ── SITL / Webots ──────────────────────────────────────────────────────────
-  # Kamera dikirim dari simulator melalui UDP socket.
-  tcp:
-    camera_source: "udp"          # terima JPEG frame via UDP datagram
+  # ── SITL / Webots (Kamera Ideal Tanpa Distorsi) ───────────────────────────
+  sitl:
+    camera_source: "udp"          # terima JPEG frame via UDP datagram (port 5005)
     udp_ip: "127.0.0.1"
     udp_port: 5005
+    # Matriks kamera Webots (focal length ~386.37 untuk 320x240, tanpa distorsi)
+    camera_matrix: [386.37, 0.0, 160.0, 0.0, 386.37, 120.0, 0.0, 0.0, 1.0]
+    dist_coeffs: [0.0, 0.0, 0.0, 0.0, 0.0]
 
-  # ── Hardware Raspberry Pi (CSI / USB Camera via V4L2) ──────────────────────
-  # Di Raspberry Pi (Ubuntu / Docker), kamera CSI/USB diakses via V4L2 (/dev/video0).
-  # Pastikan Docker dijalankan dengan flag `--device /dev/video0`.
-  serial:
-    camera_source: "v4l"          # baca langsung dari V4L2 device node (/dev/video0)
-    device: "/dev/video0"
-    capture_width: 640
-    capture_height: 480
-    capture_fps: 30
+  # ── Hardware Raspberry Pi 5 (Kamera Fisik via pi5_streamer UDP) ──────────
+  # Pada Raspi 5, pi5_streamer.py (host) memforward JPEG dari Picamera2 via UDP (port 5005).
+  raspi:
+    camera_source: "udp"          # terima JPEG frame via UDP datagram (port 5005)
+    udp_ip: "127.0.0.1"
+    udp_port: 5005
+    # Hasil kalibrasi fisik lensa Raspi 5
+    camera_matrix: [775.8415, 0.0, 340.6690, 0.0, 776.5958, 214.2745, 0.0, 0.0, 1.0]
+    dist_coeffs: [-0.39287, -0.49250, 0.00246, -0.00340, 3.80986]
 
 # ── Konfigurasi ArUco (berlaku untuk semua profil) ─────────────────────────
 aruco:
   aruco_dict: "DICT_7X7_50"      # Pilihan: DICT_4X4_50, DICT_5X5_50, DICT_6X6_50, DICT_7X7_50, dll.
   marker_length: 0.20             # Ukuran fisik marker dalam meter (contoh: 20 cm)
 
-  # Parameter kalibrasi kamera (sesuaikan dengan kamera yang digunakan)
-  camera_matrix: [386.37, 0.0, 160.0, 0.0, 386.37, 120.0, 0.0, 0.0, 1.0]
-  dist_coeffs: [0.0, 0.0, 0.0, 0.0, 0.0]
-
 # ── Web Stream ─────────────────────────────────────────────────────────────
 stream:
   port: 8086                      # Port HTTP untuk MJPEG stream (http://<ip>:8086)
+

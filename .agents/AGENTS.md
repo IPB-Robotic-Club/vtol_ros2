@@ -52,3 +52,9 @@ This document defines behavior guidelines and style rules for any AI agents work
   - `serial` (real drone) → rangefinder topic (AGL)
 - **Note (Rangefinder Topic)**: Topic MAVROS untuk rangefinder yang sudah diverifikasi dari hardware adalah `/mavros/rangefinder/rangefinder` (tipe `sensor_msgs/Range`, unit: **meter**). Topic ini sudah di-set di `vtol_base.py`. Jika ganti hardware, verifikasi ulang dengan `ros2 topic list | grep -i range`.
 
+### 5.3 Vision Camera Streaming & Calibration Rules
+- **Rule**: Both SITL (simulator) and Real Raspberry Pi 5 camera feeds enter Docker/ROS 2 via **UDP Datagrams (port 5005)**. On real Raspi 5 hardware, [pi5_streamer.py](../pi5_streamer.py) runs on the host (capturing CSI camera frames via `Picamera2`) and forwards JPEG packets over UDP to port 5005. Direct V4L2 (`/dev/video0`) / `serial` camera code is obsolete and removed.
+- **Rule**: Camera profiles in [vision_config.yaml](../workspace/src/vtol_vision/config/vision_config.yaml) are defined as `sitl` (SITL Webots ideal virtual camera without lens distortion) and `raspi` (real Raspberry Pi 5 camera with physical lens calibration matrix).
+- **Rule**: When `active_profile: "sitl"`, [aruco_receiver.py](../workspace/src/vtol_vision/vtol_vision/aruco_receiver.py) uses the SITL ideal camera matrix ($D = [0,0,0,0,0]$). When `active_profile: "raspi"`, `aruco_receiver.py` loads [camera_calibration.yaml](../camera_calibration.yaml) (if present) or the calibrated Raspi matrix from `vision_config.yaml`.
+
+

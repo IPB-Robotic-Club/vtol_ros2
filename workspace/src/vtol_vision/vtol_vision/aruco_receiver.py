@@ -279,17 +279,20 @@ class ArucoReceiverNode(Node):
         self.camera_matrix = np.array(cam_mat_list, dtype=np.float32).reshape(3, 3)
         self.dist_coeffs   = np.array(self.cam_config['dist_coeffs'], dtype=np.float32)
 
-        # Check if local calibration exists in workspace (Option 1)
+        # Check if local calibration exists in workspace (hanya untuk profil raspi)
         calib_path = "/home/pilot/workspace/camera_calibration.yaml"
-        if os.path.exists(calib_path):
+        if self.active_profile == 'raspi' and os.path.exists(calib_path):
             try:
                 with open(calib_path, 'r') as f:
                     calib_data = yaml.safe_load(f)
                     self.camera_matrix = np.array(calib_data['camera_matrix'], dtype=np.float32).reshape(3, 3)
                     self.dist_coeffs   = np.array(calib_data['distortion_coefficients'], dtype=np.float32)
-                    self.get_logger().info(f"Berhasil memuat kalibrasi kamera dari: {calib_path}")
+                    self.get_logger().info(f"Berhasil memuat kalibrasi kamera Raspi dari: {calib_path}")
             except Exception as e:
                 self.get_logger().warn(f"Gagal memuat kalibrasi dari {calib_path}, menggunakan config bawaan: {e}")
+        elif self.active_profile == 'sitl':
+            self.get_logger().info(f"Menggunakan matriks kamera ideal SITL tanpa distorsi (active_profile={self.active_profile})")
+
 
         # Setup ArUco Dictionary & Parameters (OpenCV 4.6.0 API)
         dict_id = getattr(cv2.aruco, self.aruco_dict_name, cv2.aruco.DICT_7X7_50)
@@ -318,11 +321,8 @@ class ArucoReceiverNode(Node):
         self.detection_pub = self.create_publisher(String, '/vtol/aruco/detection',  10)
         self.tf_broadcaster = TransformBroadcaster(self)
 
-        # Inisialisasi camera source sesuai profil
-        self.sock     = None   # hanya untuk UDP
-        self.capture  = None   # hanya untuk V4L2
-        self.picam2   = None   # hanya untuk rpicam (picamera2)
-
+        # Inisialisasi camera source (selalu UDP via port 5005)
+        self.sock = None
         if self.camera_source == 'udp':
             udp_ip   = self.cam_config['udp_ip']
             udp_port = self.cam_config['udp_port']
@@ -337,43 +337,8 @@ class ArucoReceiverNode(Node):
                     f"Gagal mengikat socket UDP ke {udp_ip}:{udp_port}: {e}"
                 )
                 raise e
-        elif self.camera_source == 'v4l':
-            device = self.cam_config['device']
-            self.capture = cv2.VideoCapture(device, cv2.CAP_V4L2)
-            if not self.capture.isOpened():
-                raise RuntimeError(f"Gagal membuka kamera V4L2: {device}")
-            self.capture.set(cv2.CAP_PROP_FRAME_WIDTH,  self.cam_config['capture_width'])
-            self.capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.cam_config['capture_height'])
-            self.capture.set(cv2.CAP_PROP_FPS,          self.cam_config['capture_fps'])
-            self.get_logger().info(
-                f"[{self.active_profile}] Kamera V4L2 dibuka: {device}  "
-                f"{self.cam_config['capture_width']}x{self.cam_config['capture_height']}"
-                f"@{self.cam_config['capture_fps']}fps"
-            )
-        elif self.camera_source == 'rpicam':
-            try:
-                from picamera2 import Picamera2
-            except ImportError as exc:
-                raise ImportError(
-                    "picamera2 tidak ditemukan. Install dengan: "
-                    "sudo apt install python3-picamera2"
-                ) from exc
-            cam_idx = self.cam_config.get('camera_index', 0)
-            w = self.cam_config['capture_width']
-            h = self.cam_config['capture_height']
-            self.picam2 = Picamera2(cam_idx)
-            cfg = self.picam2.create_preview_configuration(
-                main={"size": (w, h), "format": "BGR888"},
-                controls={"FrameRate": float(self.cam_config['capture_fps'])},
-            )
-            self.picam2.configure(cfg)
-            self.picam2.start()
-            self.get_logger().info(
-                f"[{self.active_profile}] RPi CSI kamera dibuka via picamera2  "
-                f"(index={cam_idx}, {w}x{h}@{self.cam_config['capture_fps']}fps)"
-            )
         else:
-            raise ValueError(f"camera_source tidak dikenal: '{self.camera_source}'")
+            raise ValueError(f"camera_source '{self.camera_source}' tidak didukung. Semua profil (sitl & raspi) menggunakan 'udp'.")
 
         # MJPEG Web Stream Server
         stream_thread = threading.Thread(
@@ -385,18 +350,11 @@ class ArucoReceiverNode(Node):
             f"(buka /stream untuk raw feed, / untuk dashboard)"
         )
 
-        # Pilih receive loop sesuai camera source
+        # Jalankan UDP receive loop thread
         self.running = True
-        loop_map = {
-            'udp':    self._receive_loop_udp,
-            'v4l':    self._receive_loop_v4l,
-            'rpicam': self._receive_loop_rpicam,
-        }
-        loop_target = loop_map.get(self.camera_source)
-        if loop_target is None:
-            raise ValueError(f"camera_source tidak dikenal: '{self.camera_source}'") 
-        self.rx_thread = threading.Thread(target=loop_target, daemon=True)
+        self.rx_thread = threading.Thread(target=self._receive_loop_udp, daemon=True)
         self.rx_thread.start()
+
 
         self.get_logger().info(
             f"ArUco Receiver Node siap. "
@@ -627,76 +585,9 @@ class ArucoReceiverNode(Node):
             pass
 
     # ------------------------------------------------------------------
-    # Receive loop: V4L2 (profil serial / hardware Raspi)
-    # ------------------------------------------------------------------
-
-    def _receive_loop_v4l(self):
-        count = 0
-        while self.running:
-            try:
-                ret, frame = self.capture.read()
-                if not ret or frame is None:
-                    self.get_logger().warn("[V4L2] Gagal membaca frame dari kamera.")
-                    time.sleep(0.05)
-                    continue
-
-                count += 1
-                h, w = frame.shape[:2]
-                self.frame_w = float(w)
-                self.frame_h = float(h)
-                raw_bytes = w * h * frame.shape[2]
-
-                self._process_frame(frame, count, raw_bytes)
-
-            except Exception as e:
-                self.get_logger().error(f"[V4L2] Error: {e}")
-                time.sleep(0.05)
-
-        try:
-            self.capture.release()
-        except Exception:
-            pass
-
-    # ------------------------------------------------------------------
-    # Receive loop: RPi CSI Camera (profil serial / picamera2)
-    # ------------------------------------------------------------------
-
-    def _receive_loop_rpicam(self):
-        count = 0
-        while self.running:
-            try:
-                # capture_array() mengembalikan numpy array BGR (format BGR888)
-                frame = self.picam2.capture_array()
-                if frame is None:
-                    time.sleep(0.01)
-                    continue
-
-                # Pastikan array dalam format BGR (picamera2 BGR888 sudah BGR)
-                if frame.ndim == 2:                         # grayscale fallback
-                    frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-                elif frame.shape[2] == 4:                   # BGRA -> BGR
-                    frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
-
-                count += 1
-                h, w = frame.shape[:2]
-                self.frame_w = float(w)
-                self.frame_h = float(h)
-                raw_bytes = w * h * frame.shape[2]
-
-                self._process_frame(frame, count, raw_bytes)
-
-            except Exception as e:
-                self.get_logger().error(f"[rpicam] Error: {e}")
-                time.sleep(0.05)
-
-        try:
-            self.picam2.stop()
-        except Exception:
-            pass
-
-    # ------------------------------------------------------------------
     # HUD overlay (digambar sebelum JPEG encode, bukan untuk GUI window)
     # ------------------------------------------------------------------
+
 
     def _draw_stream_overlay(self, frame, count, detections):
         """Gambar HUD overlay di atas frame sebelum di-encode ke MJPEG."""

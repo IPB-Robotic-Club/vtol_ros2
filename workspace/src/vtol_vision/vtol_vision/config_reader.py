@@ -85,22 +85,19 @@ def get_camera_config():
     if defaults['camera_source'] == 'udp':
         defaults['udp_ip']   = profile_cfg.get('udp_ip',   defaults['udp_ip'])
         defaults['udp_port'] = profile_cfg.get('udp_port', defaults['udp_port'])
-    elif defaults['camera_source'] in ('v4l', 'rpicam'):
-        defaults['device']         = profile_cfg.get('device',         defaults['device'])
-        defaults['capture_width']  = profile_cfg.get('capture_width',  defaults['capture_width'])
-        defaults['capture_height'] = profile_cfg.get('capture_height', defaults['capture_height'])
-        defaults['capture_fps']    = profile_cfg.get('capture_fps',    defaults['capture_fps'])
-        defaults['camera_index']   = profile_cfg.get('camera_index',   0)
 
-    # ── Baca konfigurasi ArUco (top-level 'aruco' block) ──────────────────
+    # ── Baca konfigurasi ArUco ─────────────────────────────────────────────
     aruco_cfg = cfg.get('aruco', {})
-    defaults['aruco_dict']     = aruco_cfg.get('aruco_dict',     defaults['aruco_dict'])
-    defaults['marker_length']  = aruco_cfg.get('marker_length',  defaults['marker_length'])
-    defaults['camera_matrix']  = aruco_cfg.get('camera_matrix',  defaults['camera_matrix'])
-    defaults['dist_coeffs']    = aruco_cfg.get('dist_coeffs',    defaults['dist_coeffs'])
+    defaults['aruco_dict']    = aruco_cfg.get('aruco_dict',    defaults['aruco_dict'])
+    defaults['marker_length'] = aruco_cfg.get('marker_length', defaults['marker_length'])
+
+    # Baca camera_matrix & dist_coeffs per profil terlebih dahulu, fallback ke top-level aruco
+    defaults['camera_matrix'] = profile_cfg.get('camera_matrix', aruco_cfg.get('camera_matrix', defaults['camera_matrix']))
+    defaults['dist_coeffs']   = profile_cfg.get('dist_coeffs',   aruco_cfg.get('dist_coeffs',   defaults['dist_coeffs']))
 
     # ── Baca konfigurasi stream ────────────────────────────────────────────
     stream_cfg = cfg.get('stream', {})
     defaults['stream_port'] = stream_cfg.get('port', defaults['stream_port'])
 
     return defaults
+
