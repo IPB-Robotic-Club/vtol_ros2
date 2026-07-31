@@ -57,4 +57,11 @@ This document defines behavior guidelines and style rules for any AI agents work
 - **Rule**: Camera profiles in [vision_config.yaml](../workspace/src/vtol_vision/config/vision_config.yaml) are defined as `sitl` (SITL Webots ideal virtual camera without lens distortion) and `raspi` (real Raspberry Pi 5 camera with physical lens calibration matrix).
 - **Rule**: When `active_profile: "sitl"`, [aruco_receiver.py](../workspace/src/vtol_vision/vtol_vision/aruco_receiver.py) uses the SITL ideal camera matrix ($D = [0,0,0,0,0]$). When `active_profile: "raspi"`, `aruco_receiver.py` loads [camera_calibration.yaml](../camera_calibration.yaml) (if present) or the calibrated Raspi matrix from `vision_config.yaml`.
 
+### 5.4 Profile Configuration & Single Source of Truth
+- **Rule**: `active_profile` inside [vtol_config.yaml](../workspace/src/vtol_control/config/vtol_config.yaml) is the **single source of truth** for switching between SITL (`tcp`) and real drone hardware (`serial`).
+- **Rule**: Never create separate `active_profile` keys across multiple config files. `vtol_vision` (`vision_config.yaml`) automatically maps `active_profile` from `vtol_config.yaml` (`tcp` → `sitl`, `serial` → `raspi`). Switching environments ONLY requires editing `active_profile` in `vtol_config.yaml`.
+- **Rule**: `mavlink_forward` parameters (`enabled`, `gcs_url`) in `vtol_config.yaml` are global/flat. Do NOT duplicate `mavlink_forward` per-profile (e.g. separate `tcp` and `serial` blocks under `mavlink_forward`).
+
+
+
 

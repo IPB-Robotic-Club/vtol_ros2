@@ -2,14 +2,23 @@ import os
 import yaml
 from ament_index_python.packages import get_package_share_directory
 
+# Mapping active_profile vtol_control → active_profile vtol_vision
+_PROFILE_MAP = {
+    'tcp': 'sitl',
+    'serial': 'raspi',
+}
+
 
 def get_camera_config():
     """
-    Membaca vision_config.yaml dan mengembalikan konfigurasi yang sudah di-flatten
-    berdasarkan active_profile (tcp / serial).
+    Membaca vision_config.yaml dan mengembalikan konfigurasi yang sudah di-flatten.
+
+    active_profile kamera ditentukan OTOMATIS dari vtol_config.yaml (vtol_control):
+      tcp    →  sitl   (kamera ideal Webots tanpa distorsi)
+      serial →  raspi  (kamera fisik Raspberry Pi dengan kalibrasi lensa)
 
     Struktur return dict:
-      active_profile   : str   — 'tcp' atau 'serial'
+      active_profile   : str   — 'sitl' atau 'raspi'
       camera_source    : str   — 'udp' atau 'v4l'
       # UDP-specific (hanya jika camera_source == 'udp'):
       udp_ip           : str
@@ -42,7 +51,7 @@ def get_camera_config():
 
     # ── Default values (digunakan jika file tidak ditemukan) ──────────────
     defaults = {
-        'active_profile': 'tcp',
+        'active_profile': 'sitl',
         # UDP defaults
         'udp_ip': '127.0.0.1',
         'udp_port': 5005,
@@ -73,8 +82,14 @@ def get_camera_config():
         defaults['camera_source'] = 'udp'
         return defaults
 
-    # ── Baca active_profile ────────────────────────────────────────────────
-    active_profile = cfg.get('active_profile', defaults['active_profile'])
+    # ── Baca active_profile dari vtol_control (single source of truth) ─────
+    try:
+        from vtol_control.config_reader import get_active_profile as _get_vtol_profile
+        vtol_profile = _get_vtol_profile()          # 'tcp' atau 'serial'
+        active_profile = _PROFILE_MAP.get(vtol_profile, vtol_profile)
+    except Exception:
+        # Fallback: baca langsung dari vision_config.yaml (kompatibilitas)
+        active_profile = cfg.get('active_profile', defaults['active_profile'])
     defaults['active_profile'] = active_profile
 
     # ── Baca konfigurasi profil aktif ──────────────────────────────────────

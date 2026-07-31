@@ -1,8 +1,9 @@
 # Konfigurasi Vision VTOL — ArUco Detection
-# Pilih profil aktif: "sitl" (Simulasi Webots via UDP) atau "raspi" (Hardware Raspi via UDP / pi5_streamer)
+# Profile kamera (sitl / raspi) ditentukan OTOMATIS dari vtol_config.yaml:
+#   active_profile: "tcp"    →  profile kamera: sitl
+#   active_profile: "serial" →  profile kamera: raspi
+# Cukup ubah active_profile di vtol_config.yaml — tidak perlu ubah file ini.
 
-active_profile: "sitl"
-#active_profile: "raspi"
 
 profiles:
   # ── SITL / Webots (Kamera Ideal Tanpa Distorsi) ───────────────────────────
@@ -27,7 +28,7 @@ profiles:
 # ── Konfigurasi ArUco (berlaku untuk semua profil) ─────────────────────────
 aruco:
   aruco_dict: "DICT_7X7_50"      # Pilihan: DICT_4X4_50, DICT_5X5_50, DICT_6X6_50, DICT_7X7_50, dll.
-  marker_length: 0.20             # Ukuran fisik marker dalam meter (contoh: 20 cm)
+  marker_length: 0.50             # Ukuran fisik marker dalam meter (contoh: 20 cm)
 
 # ── Web Stream ─────────────────────────────────────────────────────────────
 stream:

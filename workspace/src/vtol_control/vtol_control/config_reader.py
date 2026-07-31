@@ -199,7 +199,7 @@ def get_gcs_url():
             return ''
 
         active_profile = config.get('active_profile', 'tcp')
-        forward_config = config.get('mavlink_forward', {}).get(active_profile, {})
+        forward_config = config.get('mavlink_forward', {})
 
         if not forward_config.get('enabled', False):
             print(f"Info: MAVLink GCS forwarding dinonaktifkan untuk profil '{active_profile}'.")
