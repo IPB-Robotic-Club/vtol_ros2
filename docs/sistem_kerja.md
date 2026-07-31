@@ -70,4 +70,13 @@ Node pemantau inti (**[vtol_core.py](../workspace/src/vtol_control/vtol_control/
 
 Variabel status (koneksi, arming, mode) dipantau secara langsung melalui callback event di dalam kelas `VtolCore` agar memudahkan pemantauan dasar tanpa membebani sistem dengan pemrosesan failsafe software yang berlebihan di tingkat pendamping (companion). Failsafe kritis diserahkan kepada konfigurasi firmware Flight Controller.
 
+---
+
+## 5. Sistem Vision & Kalibrasi Kamera (`vtol_vision`)
+
+Untuk misi navigasi presisi seperti *autonomous precision landing* berbasis ArUco marker:
+* Paket `vtol_vision` menerima stream JPEG via **UDP Datagram (Port 5005)** baik untuk simulasi (`sitl`) maupun penerbangan fisik Raspi 5 (`raspi`).
+* Panduan lengkap langkah-langkah kalibrasi lensa kamera fisik dan konfigurasi profil vision dapat dilihat pada **[Panduan Kalibrasi Kamera & Vision](kalibrasi_kamera.md)**.
+
+
 
