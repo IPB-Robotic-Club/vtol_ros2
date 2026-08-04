@@ -31,7 +31,7 @@ pid_centering:
 # Servo terhubung ke AUX 6 Pixhawk = SERVO14
 # PENTING: Set SERVO14_FUNCTION = 1 (RCPassThru) di Mission Planner / QGC agar override bekerja!
 payload_drop:
-  servo_channel: 14       # SERVO14 = AUX 6 di Pixhawk (channel RC: 1-18)
+  servo_channel: 9        # SERVO9 = AUX 1 di Pixhawk (channel RC: 1-18)
   pwm_hold: 1100          # Posisi TUTUP (payload ditahan) dalam mikrodetik
   pwm_drop: 1900          # Posisi BUKA (payload dilepas) dalam mikrodetik
   pwm_mid: 1500           # Posisi tengah / netral dalam mikrodetik
