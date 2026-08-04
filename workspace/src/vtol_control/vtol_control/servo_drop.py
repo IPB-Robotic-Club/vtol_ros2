@@ -2,9 +2,9 @@
 servo_drop.py — Node ROS2 untuk mengendalikan servo payload drop melalui MAVROS.
 
 Mekanisme:
-  - Servo terhubung ke Pixhawk AUX 5 (SERVO13) yang dipetakan ke RCIN9
-  - Dikontrol via RC Override channel 9 (index array MAVROS: 8)
-  - Pixhawk akan merutekan override RC ke output servo fisik
+  - Servo terhubung ke Pixhawk AUX 5 (SERVO13)
+  - Dikontrol via MAV_CMD_DO_SET_SERVO (CommandLong) — TIDAK butuh RCPassThru
+  - Lebih andal dari RC Override karena langsung ke SERVO output
 
 Mode operasi:
   1. Terminal Interaktif — Sub-menu [L]ow | [M]id | [H]igh | [D]rop | [Q]uit
@@ -14,17 +14,20 @@ Mode operasi:
 
 import rclpy
 from rclpy.node import Node
-from mavros_msgs.msg import OverrideRCIn
+from mavros_msgs.srv import CommandLong
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from vtol_control.config_reader import get_payload_config
 import time
 import threading
 
+# MAVLink command ID untuk DO_SET_SERVO
+MAV_CMD_DO_SET_SERVO = 183
+
 
 class ServoDropNode(Node):
     """
-    Node untuk mengendalikan servo payload drop melalui MAVROS RC Override.
+    Node untuk mengendalikan servo payload drop melalui MAV_CMD_DO_SET_SERVO.
     """
 
     def __init__(self):
@@ -32,26 +35,19 @@ class ServoDropNode(Node):
 
         # ── Load Konfigurasi dari YAML ───────────────────────────────────────
         cfg = get_payload_config()
-        self.servo_channel  = int(cfg['servo_channel'])    # RC Channel (9)
+        self.servo_channel  = int(cfg['servo_channel'])    # Nomor SERVO output (13 = AUX 5)
         self.pwm_hold       = int(cfg['pwm_hold'])         # posisi TUTUP
         self.pwm_drop       = int(cfg['pwm_drop'])         # posisi BUKA
         self.pwm_mid        = int(cfg['pwm_mid'])          # posisi TENGAH
         self.drop_duration  = float(cfg['drop_duration'])  # durasi drop dalam detik
-
-        # Index array RC (0-based): channel 9 → index 8
-        self._rc_index = self.servo_channel - 1
 
         # State internal
         self._is_dropping = False
         self._drop_timer  = None
         self._lock        = threading.Lock()
 
-        # ── Publisher RC Override ────────────────────────────────────────────
-        self.rc_pub = self.create_publisher(
-            OverrideRCIn,
-            '/mavros/rc/override',
-            10
-        )
+        # ── Service Client: CommandLong untuk DO_SET_SERVO ───────────────────
+        self.cmd_client = self.create_client(CommandLong, '/mavros/cmd/command')
 
         # ── ROS2 Service: /vtol/payload/drop ────────────────────────────────
         self.drop_service = self.create_service(
@@ -69,41 +65,55 @@ class ServoDropNode(Node):
         )
 
         self.get_logger().info(
-            f"[ServoDropNode] Siap (Metode: RC Override). RC Channel={self.servo_channel} | "
+            f"[ServoDropNode] Siap (Metode: DO_SET_SERVO). SERVO={self.servo_channel} | "
             f"HOLD={self.pwm_hold}µs | DROP={self.pwm_drop}µs | MID={self.pwm_mid}µs | "
             f"Drop Duration={self.drop_duration}s"
         )
 
-        # Set servo ke posisi HOLD saat node pertama kali dimulai
-        # Berikan sedikit waktu agar publisher siap
-        time.sleep(0.5)
-        self._send_pwm(self.pwm_hold)
-        self.get_logger().info(
-            f"[ServoDropNode] Servo diinisialisasi ke posisi HOLD ({self.pwm_hold}µs)"
-        )
+        # Tunggu service MAVLink tersedia
+        self.get_logger().info("[ServoDropNode] Menunggu /mavros/cmd/command service...")
+        if self.cmd_client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().info("[ServoDropNode] Service MAVLink tersedia!")
+            # Set servo ke posisi HOLD saat node pertama kali dimulai
+            self._send_servo(self.pwm_hold)
+            self.get_logger().info(
+                f"[ServoDropNode] Servo diinisialisasi ke HOLD ({self.pwm_hold}µs)"
+            )
+        else:
+            self.get_logger().warn(
+                "[ServoDropNode] PERINGATAN: /mavros/cmd/command tidak tersedia! "
+                "Pastikan MAVROS sudah berjalan."
+            )
 
-    # ── Internal: Kirim nilai PWM ke servo melalui RC Override ──────────────
+    # ── Internal: Kirim perintah PWM via MAV_CMD_DO_SET_SERVO ───────────────
 
-    def _send_pwm(self, pwm_value: int):
-        """Mengirim perintah PWM ke servo melalui topik /mavros/rc/override."""
-        msg = OverrideRCIn()
-        # Inisialisasi semua channel ke 0 (tidak override channel lain)
-        msg.channels = [0] * 18
-        # Set hanya channel servo payload
-        msg.channels[self._rc_index] = pwm_value
-        self.rc_pub.publish(msg)
-        self.get_logger().info(
-            f"[ServoDropNode] → Override RC CH{self.servo_channel} ke {pwm_value}µs"
-        )
+    def _send_servo(self, pwm_value: int) -> bool:
+        """
+        Mengirim perintah MAV_CMD_DO_SET_SERVO untuk langsung menggerakkan servo.
+        param1 = nomor SERVO output (13 = AUX 5)
+        param2 = nilai PWM dalam mikrodetik
+        """
+        if not self.cmd_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().error("[ServoDropNode] /mavros/cmd/command tidak tersedia!")
+            return False
 
-    def _release_rc_override(self):
-        """Melepas override RC untuk channel servo (kembalikan ke 0 = tidak override)."""
-        msg = OverrideRCIn()
-        msg.channels = [0] * 18
-        self.rc_pub.publish(msg)
+        req = CommandLong.Request()
+        req.broadcast   = False
+        req.command     = MAV_CMD_DO_SET_SERVO
+        req.confirmation = 0
+        req.param1      = float(self.servo_channel)  # nomor servo output
+        req.param2      = float(pwm_value)           # nilai PWM (µs)
+        req.param3      = 0.0
+        req.param4      = 0.0
+        req.param5      = 0.0
+        req.param6      = 0.0
+        req.param7      = 0.0
+
+        self.cmd_client.call_async(req)
         self.get_logger().info(
-            f"[ServoDropNode] RC override channel {self.servo_channel} dilepas (nilai=0)."
+            f"[ServoDropNode] Mengirim Command DO_SET_SERVO: SERVO{self.servo_channel} -> {pwm_value}µs"
         )
+        return True
 
     # ── Aksi Servo ──────────────────────────────────────────────────────────
 
@@ -114,7 +124,7 @@ class ServoDropNode(Node):
                 self._drop_timer.cancel()
                 self._drop_timer = None
             self._is_dropping = False
-        self._send_pwm(self.pwm_hold)
+        self._send_servo(self.pwm_hold)
 
     def cmd_mid(self):
         """Pindahkan servo ke posisi TENGAH (MID)."""
@@ -123,16 +133,16 @@ class ServoDropNode(Node):
                 self._drop_timer.cancel()
                 self._drop_timer = None
             self._is_dropping = False
-        self._send_pwm(self.pwm_mid)
+        self._send_servo(self.pwm_mid)
 
     def cmd_high(self):
-        """Pindahkan servo ke posisi HIGH (sama dengan DROP, tanpa auto-reset)."""
+        """Pindahkan servo ke posisi HIGH / DROP (tanpa auto-reset)."""
         with self._lock:
             if self._drop_timer and self._drop_timer.is_alive():
                 self._drop_timer.cancel()
                 self._drop_timer = None
             self._is_dropping = False
-        self._send_pwm(self.pwm_drop)
+        self._send_servo(self.pwm_drop)
 
     def cmd_drop(self) -> bool:
         """
@@ -148,16 +158,15 @@ class ServoDropNode(Node):
             self._is_dropping = True
 
         self.get_logger().info(
-            f"[ServoDropNode] DROP! Membuka servo ke {self.pwm_drop}µs selama {self.drop_duration}s..."
+            f"[ServoDropNode] DROP! Buka {self.pwm_drop}µs selama {self.drop_duration}s..."
         )
-        self._send_pwm(self.pwm_drop)
+        self._send_servo(self.pwm_drop)
 
-        # Timer untuk auto-reset ke HOLD setelah drop_duration selesai
         def _auto_reset():
             self.get_logger().info(
-                f"[ServoDropNode] Auto-reset: Menutup servo kembali ke HOLD ({self.pwm_hold}µs)"
+                f"[ServoDropNode] Auto-reset ke HOLD ({self.pwm_hold}µs)"
             )
-            self._send_pwm(self.pwm_hold)
+            self._send_servo(self.pwm_hold)
             with self._lock:
                 self._is_dropping = False
                 self._drop_timer = None
@@ -201,13 +210,11 @@ class ServoDropNode(Node):
     # ── Cleanup ─────────────────────────────────────────────────────────────
 
     def destroy_node(self):
-        self.get_logger().info("[ServoDropNode] Shutdown: Mengembalikan servo ke HOLD...")
+        self.get_logger().info("[ServoDropNode] Shutdown: Reset servo ke HOLD...")
         with self._lock:
             if self._drop_timer and self._drop_timer.is_alive():
                 self._drop_timer.cancel()
-        self._send_pwm(self.pwm_hold)
-        time.sleep(0.3)
-        self._release_rc_override()
+        self._send_servo(self.pwm_hold)
         super().destroy_node()
 
 
@@ -223,7 +230,7 @@ def _print_servo_menu(cfg: dict):
     print("╔══════════════════════════════════════════════╗")
     print("║        VTOL — TES SERVO PAYLOAD DROP         ║")
     print("╠══════════════════════════════════════════════╣")
-    print(f"║  RC Override CH: {ch} (Mengendalikan RCIN{ch})       ║")
+    print(f"║  Servo Output  : SERVO{ch} (MAV_CMD_DO_SET_SERVO) ║")
     print(f"║  PWM LOW/HOLD  : {low} µs  (payload ditahan)  ║")
     print(f"║  PWM MID       : {mid} µs  (posisi tengah)    ║")
     print(f"║  PWM HIGH/DROP : {hi}  µs  (payload dilepas) ║")
@@ -233,7 +240,7 @@ def _print_servo_menu(cfg: dict):
     print("║  [M] Mid          — Servo ke posisi TENGAH  ║")
     print("║  [H] High         — Servo ke posisi BUKA    ║")
     print("║  [D] Drop         — DROP + auto-reset HOLD  ║")
-    print("║  [Q] Quit         — Keluar & reset servo    ║")
+    print("║  [Q] Quit         — Keluar                  ║")
     print("╚══════════════════════════════════════════════╝")
 
 
