@@ -84,3 +84,40 @@ def get_pid_config():
     return default_pid
 
 
+def get_payload_config():
+    """
+    Membaca parameter konfigurasi servo payload drop dari vtol_config.yaml.
+    Mengembalikan dictionary dengan nilai default yang aman jika file tidak ditemukan.
+    """
+    package_name = 'vtol_control'
+    try:
+        package_share_dir = get_package_share_directory(package_name)
+    except Exception:
+        package_share_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    src_config_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', package_name, 'config', 'vtol_config.yaml'))
+    installed_config_path = os.path.join(package_share_dir, 'config', 'vtol_config.yaml')
+    config_file_path = src_config_path if os.path.exists(src_config_path) else installed_config_path
+
+    # Nilai default yang aman — servo tidak bergerak ke DROP sampai eksplisit dikommand
+    default_payload = {
+        'servo_channel': 14,    # SERVO14 = AUX 6 di Pixhawk
+        'pwm_hold': 1100,       # PWM posisi TUTUP / payload ditahan
+        'pwm_drop': 1900,       # PWM posisi BUKA / payload dilepas
+        'pwm_mid': 1500,        # PWM posisi tengah
+        'drop_duration': 1.5,   # Detik servo tetap terbuka sebelum kembali ke HOLD
+    }
+
+    if os.path.exists(config_file_path):
+        try:
+            with open(config_file_path, 'r') as f:
+                config = yaml.safe_load(f)
+                if config and 'payload_drop' in config:
+                    payload_data = config['payload_drop']
+                    for key in default_payload:
+                        if key in payload_data:
+                            default_payload[key] = payload_data[key]
+        except Exception as e:
+            print(f"Warning: Gagal membaca konfigurasi payload dari {config_file_path}: {e}. Menggunakan default.")
+
+    return default_payload

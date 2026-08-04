@@ -31,6 +31,7 @@ setup(
             'mission_hover = vtol_control.mission_hover:main',
             'mission_maneuver = vtol_control.mission_maneuver:main',
             'mission_centering = vtol_control.mission_centering:main',
+            'servo_drop = vtol_control.servo_drop:main',
         ],
     },
 )

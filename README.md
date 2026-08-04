@@ -16,6 +16,7 @@ Sistem ini didukung oleh:
 5. [Struktur Direktori & Mekanisme Volume Mount](#5-struktur-direktori--mekanisme-volume-mount)
 6. [Deskripsi Skrip Kontrol (`vtol_control`)](#6-deskripsi-skrip-kontrol-vtol_control)
 7. [Deployment ke SBC (Raspberry Pi)](#7-deployment-ke-sbc-raspberry-pi)
+8. [Setup & Uji Coba Kamera UDP (`vtol_vision`)](#8-setup--uji-coba-kamera-udp-vtol_vision)
 
 ---
 
@@ -193,3 +194,11 @@ Package **`vtol_control`** di dalam folder **[workspace/src/vtol_control/vtol_co
 
 Untuk melakukan deployment kode secara fisik ke komputer drone pendamping (SBC ARM64 seperti Raspberry Pi/Jetson), ikuti panduan langkah demi langkahnya di:
 👉 **[Panduan Deployment ke SBC (Raspberry Pi)](docs/sbc_deployment.md)**
+
+---
+
+## 8. Setup & Uji Coba Kamera UDP (`vtol_vision`)
+
+Untuk melakukan setup, konfigurasi, dan uji coba penerimaan stream kamera dari Webots / physical camera ke dalam ROS2, ikuti panduannya di:
+👉 **[Panduan Setup & Uji Coba Kamera UDP](docs/setup_kamera.md)**
+

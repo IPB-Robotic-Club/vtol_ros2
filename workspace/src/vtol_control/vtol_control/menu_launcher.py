@@ -3,21 +3,23 @@ import subprocess
 import time
 
 def print_menu():
-    print("\n" + "="*42)
-    print("         VTOL AUTONOMOUS LAUNCHER         ")
-    print("="*42)
+    print("\n" + "="*46)
+    print("          VTOL AUTONOMOUS LAUNCHER            ")
+    print("="*46)
     print(" 1. Tampilkan HUD Status Drone (vehicle_status)")
     print(" 2. Jalankan Uji Coba Arming (test_arm)")
     print(" 3. Jalankan Misi Hover (mission_hover)")
     print(" 4. Jalankan Misi Maneuver (mission_maneuver)")
-    print(" 5. Keluar")
-    print("="*42)
+    print(" 5. Jalankan Misi Centering ArUco (mission_centering)")
+    print(" 6. Tes Servo Payload Drop (servo_drop)")
+    print(" 7. Keluar")
+    print("="*46)
 
 def main():
     while True:
         print_menu()
         try:
-            choice = input("Pilih opsi (1-5): ").strip()
+            choice = input("Pilih opsi (1-7): ").strip()
         except KeyboardInterrupt:
             print("\nExiting...")
             break
@@ -26,7 +28,6 @@ def main():
             print("\nMeluncurkan HUD Status... Tekan Ctrl+C untuk kembali ke menu.\n")
             time.sleep(1.0)
             try:
-                # Run the ROS2 HUD viewer
                 subprocess.run(["ros2", "run", "vtol_control", "vehicle_status"])
             except KeyboardInterrupt:
                 pass
@@ -34,7 +35,6 @@ def main():
             print("\nMeluncurkan Uji Coba Arming...\n")
             time.sleep(1.0)
             try:
-                # Run the ROS2 arming test
                 subprocess.run(["ros2", "run", "vtol_control", "test_arm"])
             except KeyboardInterrupt:
                 pass
@@ -42,7 +42,6 @@ def main():
             print("\nMeluncurkan Misi Hover...\n")
             time.sleep(1.0)
             try:
-                # Run the ROS2 hover mission
                 subprocess.run(["ros2", "run", "vtol_control", "mission_hover"])
             except KeyboardInterrupt:
                 pass
@@ -50,15 +49,29 @@ def main():
             print("\nMeluncurkan Misi Maneuver...\n")
             time.sleep(1.0)
             try:
-                # Run the ROS2 maneuver mission
                 subprocess.run(["ros2", "run", "vtol_control", "mission_maneuver"])
             except KeyboardInterrupt:
                 pass
         elif choice == '5':
+            print("\nMeluncurkan Misi Centering ArUco...\n")
+            time.sleep(1.0)
+            try:
+                subprocess.run(["ros2", "run", "vtol_control", "mission_centering"])
+            except KeyboardInterrupt:
+                pass
+        elif choice == '6':
+            print("\nMeluncurkan Tes Servo Payload Drop...")
+            print("Gunakan [L]ow | [M]id | [H]igh | [D]rop | [Q]uit di sub-menu.\n")
+            time.sleep(1.0)
+            try:
+                subprocess.run(["ros2", "run", "vtol_control", "servo_drop"])
+            except KeyboardInterrupt:
+                pass
+        elif choice == '7':
             print("\nKeluar dari menu launcher.")
             break
         else:
-            print("\nPilihan tidak valid. Silakan masukkan angka 1-5.")
+            print("\nPilihan tidak valid. Silakan masukkan angka 1-7.")
 
 if __name__ == '__main__':
     main()

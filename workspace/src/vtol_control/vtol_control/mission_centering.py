@@ -273,9 +273,14 @@ class MissionCenteringNode(VtolBaseNode):
                 self.last_raw_center_x = center_x
                 self.last_raw_center_y = center_y
 
-                # Normalisasi error menggunakan dimensi aktual dari frame (dikembalikan ke PV - SP, negative feedback)
-                self.norm_error_x = (center_x - (frame_w / 2.0)) / (frame_w / 2.0)
-                self.norm_error_y = (center_y - (frame_h / 2.0)) / (frame_h / 2.0)
+                # Opsi 2: Gunakan koordinat fisik 3D (meter) jika tersedia, fallback ke piksel ternormalisasi jika tidak
+                if 'pose_tvec' in marker:
+                    # pose_tvec[0] adalah translasi X (meter), pose_tvec[1] adalah Y (meter)
+                    self.norm_error_x = float(marker['pose_tvec'][0])
+                    self.norm_error_y = float(marker['pose_tvec'][1])
+                else:
+                    self.norm_error_x = (center_x - (frame_w / 2.0)) / (frame_w / 2.0)
+                    self.norm_error_y = (center_y - (frame_h / 2.0)) / (frame_h / 2.0)
 
                 # Log event deteksi ke CSV (src=VISION)
                 if self.csv_file:
