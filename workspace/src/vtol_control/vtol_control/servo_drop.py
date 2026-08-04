@@ -294,8 +294,6 @@ def run_interactive_mode(node: ServoDropNode, cfg: dict):
             print(f"  ✗ Perintah tidak valid: '{choice}'")
             print("    Gunakan: [L]ow | [M]id | [H]igh | [D]rop | [Q]uit")
 
-        # Proses callback ROS2 yang mungkin tertunda
-        rclpy.spin_once(node, timeout_sec=0.1)
 
 
 # ── Entry Point ──────────────────────────────────────────────────────────────
