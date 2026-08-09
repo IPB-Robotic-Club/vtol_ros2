@@ -62,7 +62,7 @@ def get_camera_config():
         'capture_fps': 30,
         # ArUco defaults
         'aruco_dict': 'DICT_7X7_50',
-        'marker_length': 0.20,
+        'marker_length': 0.50,
         'camera_matrix': [320.0, 0.0, 320.0, 0.0, 320.0, 240.0, 0.0, 0.0, 1.0],
         'dist_coeffs': [0.0, 0.0, 0.0, 0.0, 0.0],
         # Stream defaults
