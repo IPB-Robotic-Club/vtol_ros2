@@ -712,110 +712,136 @@ class ArucoReceiverNode(Node):
 
 
     def _draw_stream_overlay(self, frame, count, detections):
-        """
-        HUD Stream Overlay Minimalis (Port 8086).
-        Menampilkan:
-          1. Top HUD Banner (ID, Dist, Yaw, Status IN ZONE / ALIGNING / CENTERING)
-          2. Center Crosshair (kamera) + Lingkaran Zona Toleransi Tipis (2.5 cm)
-          3. Garis Vector Error + Single Target Dot
-          4. Panah 3D FRONT Marker (mengindikasikan arah heading depan target)
-        """
+        """Gambar HUD overlay di atas frame sebelum di-encode ke MJPEG."""
         h, w = frame.shape[:2]
-        cx_frame, cy_frame = w // 2, h // 2
-
-        tol_m = 0.025        # 2.5 cm (sesuai error_threshold di vtol_config.yaml)
-        yaw_tol_rad = 0.075  # ~4.3 deg (sesuai yaw_error_threshold di vtol_config.yaml)
-
-        # ── 1. Center Crosshair + Lingkaran Toleransi Tipis ───────────
-        fx = float(self.camera_matrix[0, 0])
-        tz_ref = 1.0
-        if detections and 'pose_tvec' in detections[0]:
-            tz_ref = max(0.1, detections[0]['pose_tvec'][2])
-
-        tol_px = int(fx * tol_m / tz_ref)
-        tol_px = max(6, min(tol_px, min(w, h) // 3))
-
-        # Lingkaran toleransi di pusat kamera
-        cv2.circle(frame, (cx_frame, cy_frame), tol_px, (0, 220, 80), 1, cv2.LINE_AA)
-
-        cross_len = 10
-        cv2.line(frame, (cx_frame - cross_len, cy_frame), (cx_frame + cross_len, cy_frame), (220, 220, 220), 1, cv2.LINE_AA)
-        cv2.line(frame, (cx_frame, cy_frame - cross_len), (cx_frame, cy_frame + cross_len), (220, 220, 220), 1, cv2.LINE_AA)
-
-        # ── 2. Top HUD Banner (Compact Bar) ───────────────────────────
-        bar_h = 34
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (0, 0), (w, bar_h), (12, 12, 12), -1)
-        cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
-        cv2.line(frame, (0, bar_h), (w, bar_h), (50, 50, 50), 1)
 
         n_markers = len(detections)
-        if n_markers == 0:
-            cv2.putText(frame, "SEARCHING FOR MARKER...", (12, 23),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (80, 150, 255), 1, cv2.LINE_AA)
-            cv2.putText(frame, f"#{count}", (w - 60, 23),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (120, 120, 120), 1, cv2.LINE_AA)
-            return
+        status_color = (0, 220, 0) if n_markers > 0 else (0, 80, 220)
+        status_text = f"Frame #{count}  |  Marker: {n_markers}"
+        cv2.rectangle(frame, (0, 0), (w, 30), (0, 0, 0), -1)
+        cv2.putText(frame, status_text, (8, 21),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, status_color, 2, cv2.LINE_AA)
 
-        det = detections[0]
-        marker_id = det['id']
-        tvec_px = det.get('tvec_px', det['center'])
-        mx, my = int(tvec_px[0]), int(tvec_px[1])
-        mx = max(0, min(w - 1, mx))
-        my = max(0, min(h - 1, my))
+        # ── Info per marker ────────────────────────────────────────────
+        for det in detections:
+            marker_id = det['id']
+            cx, cy = det['center']
+            norm_ex = (cx - w / 2.0) / (w / 2.0)
+            norm_ey = (cy - h / 2.0) / (h / 2.0)
 
-        tx_m, ty_m, tz_m = 0.0, 0.0, 1.0
-        if 'pose_tvec' in det:
-            tx_m, ty_m, tz_m = det['pose_tvec']
-        dist_m = math.sqrt(tx_m**2 + ty_m**2)
+            cx_i, cy_i = int(cx), int(cy)
+            cv2.circle(frame, (cx_i, cy_i), 5, (0, 255, 255), -1)
 
-        yaw_rad = 0.0
-        if 'pose_rvec' in det:
-            yaw_rad = get_yaw_from_rvec(det['pose_rvec'])
-        yaw_deg = math.degrees(yaw_rad)
+            # Menampilkan koordinat 3D di HUD jika tersedia
+            x_m, y_m, z_m = 0.0, 0.0, 0.0
+            if 'pose_tvec' in det:
+                x_m, y_m, z_m = det['pose_tvec']
 
-        is_xy_ok = (dist_m <= tol_m)
-        is_yaw_ok = (abs(yaw_rad) <= yaw_tol_rad)
-        in_zone = is_xy_ok and is_yaw_ok
+            # Yaw error dan arahnya
+            yaw_hint = ''
+            if 'pose_rvec' in det:
+                import math
+                rvec_z = det['pose_rvec'][2]
+                # Wrap ke [-pi, pi]
+                rvec_z = (rvec_z + math.pi) % (2 * math.pi) - math.pi
+                yaw_deg = math.degrees(rvec_z)
+                if abs(rvec_z) < 0.1:
+                    yaw_hint = f"Yaw: {rvec_z:+.2f}r ({yaw_deg:+.0f}deg) OK"
+                elif rvec_z > 0:
+                    yaw_hint = f"Yaw: {rvec_z:+.2f}r ({yaw_deg:+.0f}deg) -> YAW RIGHT"
+                else:
+                    yaw_hint = f"Yaw: {rvec_z:+.2f}r ({yaw_deg:+.0f}deg) -> YAW LEFT"
 
-        status_text = "IN ZONE" if in_zone else ("ALIGNING YAW" if not is_yaw_ok else "CENTERING")
-        status_color = (0, 230, 90) if in_zone else ((0, 160, 255) if not is_yaw_ok else (0, 90, 255))
+            lines = [
+                (f"ID: {marker_id}", 0.9, (0, 255, 0), 2),
+                (f"XYZ: ({x_m:+.2f}, {y_m:+.2f}, {z_m:+.2f}) m", 0.55, (0, 220, 255), 1),
+                (f"px ({cx_i}, {cy_i})",   0.55, (255, 255, 255), 1),
+            ]
+            if yaw_hint:
+                lines.append((yaw_hint, 0.5, (220, 100, 255), 1))
 
-        # Text banner utama
-        info_str = f"MARKER #{marker_id}  |  DIST: {dist_m:.3f}m (tol {tol_m*100:.1f}cm)  |  YAW: {yaw_deg:+.1f}°"
-        cv2.putText(frame, info_str, (12, 23),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.48, (230, 230, 230), 1, cv2.LINE_AA)
+            line_h = 24
+            text_y = cy_i - 10 - len(lines) * line_h
+            text_y = max(text_y, 35)
 
-        # Status Badge (Kanan Atas)
-        (tw, _), _ = cv2.getTextSize(status_text, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 2)
-        cv2.rectangle(frame, (w - tw - 20, 5), (w - 8, bar_h - 5), (30, 30, 30), -1)
-        cv2.rectangle(frame, (w - tw - 20, 5), (w - 8, bar_h - 5), status_color, 1)
-        cv2.putText(frame, status_text, (w - tw - 14, 22),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.48, status_color, 1, cv2.LINE_AA)
+            for text, scale, color, thickness in lines:
+                (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
+                tx = max(4, min(cx_i - tw // 2, w - tw - 4))
+                cv2.putText(frame, text, (tx + 1, text_y + 1),
+                            cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0), thickness + 1, cv2.LINE_AA)
+                cv2.putText(frame, text, (tx, text_y),
+                            cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
+                text_y += line_h
 
-        # ── 3. Vector Garis Error & Single Target Dot ─────────────────
-        target_color = (0, 230, 90) if is_xy_ok else (0, 90, 255)
-        # Garis penghubung pusat kamera ke marker
-        cv2.line(frame, (cx_frame, cy_frame), (mx, my), (0, 0, 0), 3, cv2.LINE_AA)
-        cv2.line(frame, (cx_frame, cy_frame), (mx, my), target_color, 2, cv2.LINE_AA)
+            on_center = abs(norm_ex) < 0.15 and abs(norm_ey) < 0.15
+            box_color = (0, 255, 0) if on_center else (0, 165, 255)
+            cv2.line(frame, (cx_i, cy_i - 5), (cx_i, text_y - line_h + 5), box_color, 1, cv2.LINE_AA)
 
-        # Titik Target Marker Single (Bersih)
-        cv2.circle(frame, (mx, my), 6, (0, 0, 0), -1)
-        cv2.circle(frame, (mx, my), 4, target_color, -1)
+            # ── FRONT heading arrow ────────────────────────────────────
+            # Project titik Y+ lokal marker (sisi depan/atas marker) ke image plane
+            # Arah Y+ dalam koordinat marker = sisi "atas" marker = depan ArUco
+            if 'pose_tvec' in det and 'pose_rvec' in det:
+                try:
+                    rvec_arr = np.array(det['pose_rvec'], dtype=np.float32).reshape(3, 1)
+                    tvec_arr = np.array(det['pose_tvec'], dtype=np.float32).reshape(3, 1)
 
-        # ── 4. Panah 3D FRONT Marker (Target Heading) ────────────────
-        front_px = det.get('front_px')
-        if front_px:
-            fx_p, fy_p = int(front_px[0]), int(front_px[1])
-            front_color = (0, 235, 255)  # Cyan/Kuning cerah
-            cv2.arrowedLine(frame, (mx, my), (fx_p, fy_p), (0, 0, 0), 4, tipLength=0.25, line_type=cv2.LINE_AA)
-            cv2.arrowedLine(frame, (mx, my), (fx_p, fy_p), front_color, 2, tipLength=0.25, line_type=cv2.LINE_AA)
+                    # Panjang panah = setengah sisi marker (proporsional)
+                    arrow_len = self.marker_length * 0.6
 
-            # Label FRONT
-            cv2.putText(frame, "FRONT ^", (fx_p + 4, fy_p + 4),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 3, cv2.LINE_AA)
-            cv2.putText(frame, "FRONT ^", (fx_p + 3, fy_p + 3),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, front_color, 1, cv2.LINE_AA)
+                    # Titik asal (center marker) dan titik ujung (Y+ = arah FRONT)
+                    obj_origin = np.array([[0.0, 0.0, 0.0]], dtype=np.float32)
+                    obj_front  = np.array([[0.0, -arrow_len, 0.0]], dtype=np.float32)
+
+                    img_origin, _ = cv2.projectPoints(
+                        obj_origin, rvec_arr, tvec_arr,
+                        self.camera_matrix, self.dist_coeffs
+                    )
+                    img_front, _ = cv2.projectPoints(
+                        obj_front, rvec_arr, tvec_arr,
+                        self.camera_matrix, self.dist_coeffs
+                    )
+
+                    p_origin = tuple(img_origin[0][0].astype(int))
+                    p_front  = tuple(img_front[0][0].astype(int))
+
+                    # Clamp ke batas frame
+                    p_origin = (
+                        max(0, min(w - 1, p_origin[0])),
+                        max(0, min(h - 1, p_origin[1]))
+                    )
+                    p_front = (
+                        max(0, min(w - 1, p_front[0])),
+                        max(0, min(h - 1, p_front[1]))
+                    )
+
+                    # Gambar panah magenta tebal
+                    cv2.arrowedLine(
+                        frame, p_origin, p_front,
+                        (255, 60, 255),   # magenta
+                        3, cv2.LINE_AA, tipLength=0.35
+                    )
+                    # Shadow tipis untuk kontras
+                    cv2.arrowedLine(
+                        frame, p_origin, p_front,
+                        (0, 0, 0), 5, cv2.LINE_AA, tipLength=0.35
+                    )
+                    cv2.arrowedLine(
+                        frame, p_origin, p_front,
+                        (255, 60, 255), 3, cv2.LINE_AA, tipLength=0.35
+                    )
+
+                    # Label "FRONT" di ujung panah
+                    label = "FRONT"
+                    (lw, lh), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                    lx = max(2, min(w - lw - 2, p_front[0] - lw // 2))
+                    ly = max(lh + 4, min(h - 4, p_front[1] - 6))
+                    cv2.putText(frame, label, (lx + 1, ly + 1),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 3, cv2.LINE_AA)
+                    cv2.putText(frame, label, (lx, ly),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 255), 2, cv2.LINE_AA)
+
+                except Exception:
+                    pass  # Jika proyeksi gagal, skip saja — jangan crash
 
 
     # ------------------------------------------------------------------
