@@ -163,10 +163,20 @@ class VtolBaseNode(Node):
             req = CommandBool.Request()
             req.value = arm_value
             self.arming_client.call_async(req)
-            return True
         else:
             self.get_logger().error(f"Arming service not available for value: {arm_value}")
             return False
+
+    def set_rc_channel(self, channel: int, pwm_value: int):
+        """
+        Set override value for a specific RC channel (1-18).
+        channel: 1-indexed (e.g. 9 for CH9)
+        pwm_value: PWM value in microseconds (e.g. 1100, 1500, 1900) or 0 to release
+        """
+        if 1 <= channel <= 18:
+            self.rc_channels[channel - 1] = int(pwm_value)
+        else:
+            self.get_logger().error(f"Invalid RC channel: {channel}. Must be between 1 and 18.")
 
     def publish_rc(self):
         # MAVROS Connection watchdog
