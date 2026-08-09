@@ -137,25 +137,27 @@ class ArucoDebugNode(Node):
             self.get_logger().warn(f"Gagal load PID config, pakai default: {e}")
             pid = {}
 
-        self.max_override      = pid.get('max_override', 40)
-        self.max_yaw_override  = pid.get('max_yaw_override', 60)
+        self.max_override      = pid.get('max_override', 30)
+        self.max_yaw_override  = pid.get('max_yaw_override', 30)
         self.error_threshold   = pid.get('error_threshold', 0.08)
-        self.yaw_error_threshold = pid.get('yaw_error_threshold', 0.1)
-        deadzone_bias          = pid.get('deadzone_bias', 12.0)
+        self.yaw_error_threshold = pid.get('yaw_error_threshold', 0.08)
+        deadzone_bias          = pid.get('deadzone_bias', 25.0)
+        deadzone_bias_yaw      = pid.get('deadzone_bias_yaw', 25.0)
         pid_max_raw            = self.max_override - deadzone_bias
+        pid_max_yaw_raw        = self.max_yaw_override - deadzone_bias_yaw
 
         # PID simulators (dry-run, tidak publish)
         self.pid_roll  = PIDSimulator(
-            pid.get('kp_roll', 15.0), pid.get('ki_roll', 0.5),
-            pid.get('kd_roll', 5.0), pid_max_raw
+            pid.get('kp_roll', 5.0), pid.get('ki_roll', 0.2),
+            pid.get('kd_roll', 8.0), pid_max_raw, d_filter_alpha=0.4
         )
         self.pid_pitch = PIDSimulator(
-            pid.get('kp_pitch', 15.0), pid.get('ki_pitch', 0.5),
-            pid.get('kd_pitch', 5.0), pid_max_raw
+            pid.get('kp_pitch', 5.0), pid.get('ki_pitch', 0.2),
+            pid.get('kd_pitch', 8.0), pid_max_raw, d_filter_alpha=0.4
         )
         self.pid_yaw   = PIDSimulator(
-            pid.get('kp_yaw', 8.0), pid.get('ki_yaw', 0.1),
-            pid.get('kd_yaw', 4.0), self.max_yaw_override - deadzone_bias
+            pid.get('kp_yaw', 5.0), pid.get('ki_yaw', 0.2),
+            pid.get('kd_yaw', 8.0), pid_max_yaw_raw, d_filter_alpha=0.4
         )
         self.deadzone_bias = deadzone_bias
 

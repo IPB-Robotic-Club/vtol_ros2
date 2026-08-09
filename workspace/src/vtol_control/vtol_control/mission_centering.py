@@ -162,13 +162,13 @@ class MissionCenteringNode(VtolBaseNode):
             self.pid_params['kd_pitch'], pid_max_raw, d_filter_alpha=0.4
         )
         # Yaw PID: koreksi heading drone agar axis kamera sejajar dengan marker
-        # Harus diselesaikan SEBELUM centering Roll/Pitch agar axis kontrol benar
-        max_yaw_raw = self.pid_params.get('max_yaw_override', 60) - 10.0
+        deadzone_bias_yaw = self.pid_params.get('deadzone_bias_yaw', 25.0)
+        max_yaw_raw = self.pid_params.get('max_yaw_override', 30) - deadzone_bias_yaw
         self.pid_yaw = PIDController(
-            self.pid_params.get('kp_yaw', 8.0), self.pid_params.get('ki_yaw', 0.0),
-            self.pid_params.get('kd_yaw', 4.0), max_yaw_raw, d_filter_alpha=0.3
+            self.pid_params.get('kp_yaw', 5.0), self.pid_params.get('ki_yaw', 0.2),
+            self.pid_params.get('kd_yaw', 8.0), max_yaw_raw, d_filter_alpha=0.4
         )
-        self.yaw_error_threshold = self.pid_params.get('yaw_error_threshold', 0.1)
+        self.yaw_error_threshold = self.pid_params.get('yaw_error_threshold', 0.08)
 
         self.write_log(
             f"LOADED PARAMETERS: kp_roll={self.pid_roll.kp}, ki_roll={self.pid_roll.ki}, "
@@ -324,13 +324,9 @@ class MissionCenteringNode(VtolBaseNode):
                     except Exception:
                         pose_valid = False
 
-                if has_tvec and pose_valid:
-                    self.norm_error_x = tx
-                    self.norm_error_y = ty
-                else:
-                    # Fallback ke piksel ternormalisasi jika tvec tidak ada / invalid
-                    self.norm_error_x = (center_x - (frame_w / 2.0)) / (frame_w / 2.0)
-                    self.norm_error_y = (center_y - (frame_h / 2.0)) / (frame_h / 2.0)
+                # Normalisasi error menggunakan dimensi aktual dari frame (menyerupai commit 51fe8a59)
+                self.norm_error_x = (center_x - (frame_w / 2.0)) / (frame_w / 2.0)
+                self.norm_error_y = (center_y - (frame_h / 2.0)) / (frame_h / 2.0)
 
                 # ── Yaw dari pose_rvec ──
                 if 'pose_rvec' in marker:
