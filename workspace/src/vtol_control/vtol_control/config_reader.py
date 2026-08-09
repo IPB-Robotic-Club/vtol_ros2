@@ -102,7 +102,12 @@ def get_pid_config():
         'error_threshold': 0.06,
         'centering_duration': 3.0,
         'marker_lost_timeout': 1.0,
-        'deadzone_bias': 25.0
+        'deadzone_bias': 25.0,
+        # Active altitude hold parameters
+        'hold_altitude': True,
+        'kp_altitude': 30.0,
+        'max_throttle_correction': 80,
+        'hover_base': 1500,
     }
 
     if os.path.exists(config_file_path):

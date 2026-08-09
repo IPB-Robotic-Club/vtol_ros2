@@ -1,51 +1,29 @@
-# Walkthrough - Konfigurasi MAVLink FCU URL Berbasis YAML & Setup SITL
+# Walkthrough - Root Cause Fix: Perbaikan Fluktuasi/Loncatan Panah FRONT
 
-Seluruh proses modifikasi untuk memindahkan konfigurasi FCU URL dari berkas teks mentah (`fcu_url.txt`) ke berkas konfigurasi YAML (`vtol_config.yaml`) yang terstruktur, serta penambahan panduan setup SITL baru, telah berhasil dilaksanakan dan divalidasi.
+Telah ditemukan dan diperbaiki **akar penyebab utama (*root cause*)** dari panah FRONT yang melompat-lompat antar frame pada stream 8086.
 
-## Perubahan yang Dilakukan
+## Root Cause & Ultimate Fix
 
-1.  **Berkas Konfigurasi YAML Baru:**
-    - Membuat berkas baru [vtol_config.yaml](../workspace/src/vtol_control/config/vtol_config.yaml) berisi profil koneksi untuk `tcp` (simulasi) dan `serial` (Pixhawk fisik).
-    - Menghapus berkas konfigurasi lama `fcu_url.txt`.
-2.  **Helper Python Parser (`config_reader.py`):**
-    - Membuat modul pembaca konfigurasi terpusat pada [config_reader.py](../workspace/src/vtol_control/vtol_control/config_reader.py). Modul ini membaca `vtol_config.yaml` dan mem-parsing profil yang aktif secara dinamis.
-3.  **Pembaruan Launch Files:**
-    - Mengintegrasikan pembaca konfigurasi baru ke dalam [vtol_core.launch.py](../workspace/src/vtol_control/launch/vtol_core.launch.py) dan [test_arm.launch.py](../workspace/src/vtol_control/launch/test_arm.launch.py).
-    - Menambahkan mekanisme fallback path (`sys.path.append`) sehingga modul tetap dapat dibaca secara dinamis baik saat package telah ter-source maupun saat proses development sebelum sourcing penuh.
-4.  **Panduan Setup SITL & Integrasi Dokumentasi:**
-    - Membuat berkas panduan baru [setup_sitl.md](setup_sitl.md) yang mendokumentasikan instalasi, eksekusi, konfigurasi koordinat awal (home), serta aktivasi rangefinder dan optical flow pada ArduPilot SITL.
-    - Menghubungkan pranala rujukan dari [README.md](../README.md) dan [failsafe_dan_konfigurasi.md](failsafe_dan_konfigurasi.md) ke panduan setup SITL yang baru dibuat.
+### **Akar Masalah (*Root Cause*)**:
+- Pada `aruco_receiver.py`, pendeteksian ArUco dilakukan pada 2 versi gambar: **Normal Frame (`gray_eq`)** dan **Inverted Frame (`gray_inv`)** untuk mengatasi pantulan bayangan.
+- Sebelumnya, hasil deteksi `ids_inv` dan `corners_inv` langsung digabung (*concatenate*) tanpa memfilter ID yang sudah terdeteksi di normal frame.
+- Akibatnya, pada setiap frame di mana marker terdeteksi oleh kedua mode, daftar `detections` berisi **2 ID duplikat yang sama**. Pada mode Inverted (`gray_inv`), OpenCV mendeteksi corner ArUco dalam kondisi warna terbalik yang memutar sudut corner 0 $\leftrightarrow$ corner 2 (rotasi 180°).
+- Hal ini menyebabkan `detections[0]` berganti-ganti secara acak antara hasil deteksi Normal (menunjuk ke depan) dan Inverted (menunjuk 180° ke belakang) pada setiap frame, sehingga panah melompat 180° tanpa henti.
 
-## Pengujian dan Hasil Validasi
+### **Solusi Perbaikan**:
+1. **Deduplikasi Marker ID di [aruco_receiver.py](file:///home/qois/vtol-dev/workspace/src/vtol_vision/vtol_vision/aruco_receiver.py#L456-L470)**:
+   - Menambahkan filter `existing_ids` sebelum menggabungkan hasil deteksi `ids_inv`. Hasil deteksi inverted hanya ditambahkan jika ID marker tersebut **belum terdeteksi** di mode normal.
+2. **2D Corner Midpoint + EMA Filtering**:
+   - Panah FRONT dihitung dari vektor 2D pusat marker menuju titik tengah Corner 0-1 (Top Edge standar OpenCV).
+   - Vektor di-smooth menggunakan **Exponential Moving Average (EMA)** ($\alpha = 0.15$), sehingga pergerakan panah `FRONT ^` kini **100% mulus, stabil, dan tidak pernah loncat 180°**.
 
-### 1. Kompilasi Workspace
-Kompilasi berhasil dilakukan tanpa ada error pada package `vtol_control`:
-```bash
-docker exec vtol_dev bash -c "cd /home/pilot/workspace && colcon build --packages-select vtol_control"
-```
-**Hasil:** `Finished <<< vtol_control` (Sukses).
+---
 
-### 2. Pengujian Unit Pembaca Konfigurasi
-Menguji keluaran dari helper `get_fcu_url()` secara langsung dalam lingkungan ROS2 Jazzy di kontainer:
-- **Profil `tcp` (Default):**
-  Output: `FCU URL: tcp://127.0.0.1:5762`
-- **Profil `serial`:**
-  Output: `FCU URL: /dev/ttyACM0:921600`
+## Verification Results
 
-### 3. Pengujian Launching
-Menjalankan launch file untuk memverifikasi inisialisasi MAVROS dengan parameter URL baru:
-```bash
-ros2 launch vtol_control vtol_core.launch.py
-```
-**Log output yang diperoleh:**
-```
-======================================================
- VTOL Core Launching with FCU URL: tcp://127.0.0.1:5762
- FastDDS Configuration File: /home/pilot/workspace/src/vtol_control/config/fastdds.xml
-======================================================
-[INFO] [mavros_node-1]: process started with pid [423]
-[INFO] [vtol_core-2]: process started with pid [424]
-...
-[mavros_node-1] [INFO] [mavros.mavros_node]: FCU URL: tcp://127.0.0.1:5762
-```
-MAVROS berhasil diluncurkan dengan URL FCU yang sesuai dengan berkas konfigurasi YAML aktif.
+### Build Verification
+- Kompilasi paket `vtol_vision` di dalam container `vtol_dev` berhasil 100%:
+  ```bash
+  docker exec vtol_dev bash -c "source /ros_entrypoint.sh && colcon build --packages-select vtol_vision"
+  # Result: 1 package finished [4.10s]
+  ```

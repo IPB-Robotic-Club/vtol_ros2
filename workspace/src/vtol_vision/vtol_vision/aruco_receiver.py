@@ -50,6 +50,25 @@ def rotvec2quat(rvec):
     return (x/mag, y/mag, z/mag, w/mag)
 
 
+def get_yaw_from_rvec(rvec):
+    """
+    Ekstrak yaw marker relatif terhadap kamera dari Rodrigues vector.
+
+    rvec dari solvePnP adalah axis-angle (Rodrigues), bukan Euler angle.
+    Mengambil rvec[2] mentah sebagai yaw adalah SALAH karena nilainya bergantung
+    pada seluruh axis rotasi, bukan hanya komponen Z.
+
+    Solusi benar: konversi ke rotation matrix, lalu ambil yaw via atan2(R[1,0], R[0,0])
+    (konvensi Euler ZYX, sudut rotasi marker di bidang XY kamera).
+
+    Return: yaw dalam radian, range [-pi, pi]
+    """
+    rvec_arr = np.array(rvec, dtype=np.float64).reshape(3, 1)
+    R, _ = cv2.Rodrigues(rvec_arr)
+    yaw = math.atan2(R[1, 0], R[0, 0])
+    return yaw
+
+
 LOG_PATH = "/home/pilot/workspace/aruco_vision.log"
 
 # ---------------------------------------------------------------------------
@@ -355,6 +374,12 @@ class ArucoReceiverNode(Node):
         self.rx_thread = threading.Thread(target=self._receive_loop_udp, daemon=True)
         self.rx_thread.start()
 
+        # EMA smoothing buffer per marker ID untuk menstabilkan panah visualisasi.
+        # Format: {marker_id: {'rvec': np.array, 'tvec': np.array}}
+        # Alpha: 0=freeze (semua dari history), 1=no filter (raw).
+        # 0.3 berarti 70% bobot history → cukup smooth tanpa terlalu lambat.
+        self._pose_smooth: dict = {}
+        self._pose_ema_alpha = 0.3
 
         self.get_logger().info(
             f"ArUco Receiver Node siap. "
@@ -431,11 +456,19 @@ class ArucoReceiverNode(Node):
             gray_inv, self.aruco_dict, parameters=self.aruco_params
         )
 
-        # 3. Gabungkan hasil deteksi dari kedua mode
+        # 3. Gabungkan hasil deteksi dari kedua mode (tanpa duplikasi marker ID)
         if ids_inv is not None and len(ids_inv) > 0:
             if ids is not None and len(ids) > 0:
-                ids = np.concatenate((ids, ids_inv), axis=0)
-                corners = corners + corners_inv
+                existing_ids = set(ids.flatten())
+                unique_corners_inv = []
+                unique_ids_inv = []
+                for idx_inv, id_val in enumerate(ids_inv.flatten()):
+                    if id_val not in existing_ids:
+                        unique_ids_inv.append([id_val])
+                        unique_corners_inv.append(corners_inv[idx_inv])
+                if unique_ids_inv:
+                    ids = np.concatenate((ids, np.array(unique_ids_inv, dtype=np.int32)), axis=0)
+                    corners = corners + unique_corners_inv
             else:
                 ids = ids_inv
                 corners = corners_inv
@@ -448,10 +481,10 @@ class ArucoReceiverNode(Node):
 
             half = self.marker_length / 2.0
             obj_pts_single = np.array([
-                [-half,  half, 0],
-                [ half,  half, 0],
-                [ half, -half, 0],
-                [-half, -half, 0],
+                [-half, -half, 0.0],  # 0: Top-Left
+                [ half, -half, 0.0],  # 1: Top-Right
+                [ half,  half, 0.0],  # 2: Bottom-Right
+                [-half,  half, 0.0],  # 3: Bottom-Left
             ], dtype=np.float32)
 
             for i, marker_id in enumerate(ids.flatten()):
@@ -469,7 +502,23 @@ class ArucoReceiverNode(Node):
                         self.camera_matrix, self.dist_coeffs,
                         flags=cv2.SOLVEPNP_IPPE_SQUARE
                     )
-                    best_idx = int(np.argmin([e[0] for e in repro_errs]))
+                    err_list = [e[0] for e in repro_errs]
+                    if len(err_list) > 1:
+                        err0, err1 = err_list[0], err_list[1]
+                        min_err = min(err0, err1)
+                        # Jika reprojection error dua kandidat sangat dekat (selisih < 25%),
+                        # pilih kandidat dengan magnitude yaw terkecil untuk mencegah flipping 180 deg.
+                        # PENTING: gunakan rotation matrix (bukan rvec[2] mentah) karena rvec adalah
+                        # Rodrigues axis-angle, bukan Euler angle — rvec[2] mentah inkonsisten.
+                        if abs(err0 - err1) < 0.25 * (min_err + 1e-6):
+                            z0 = abs(get_yaw_from_rvec(rvecs_sol[0]))
+                            z1 = abs(get_yaw_from_rvec(rvecs_sol[1]))
+                            best_idx = 0 if z0 <= z1 else 1
+                        else:
+                            best_idx = int(np.argmin(err_list))
+                    else:
+                        best_idx = int(np.argmin(err_list))
+
                     rvec = rvecs_sol[best_idx].flatten()
                     tvec = tvecs_sol[best_idx].flatten()
                 except Exception:
@@ -480,29 +529,102 @@ class ArucoReceiverNode(Node):
                     rvec = rvecs_fb[0][0]
                     tvec = tvecs_fb[0][0]
 
+                # ── 2D Corner Geometry untuk FRONT Arrow (Top Edge: Corner 0 -> 1) ──
+                # Top edge midpoint (Corner 0 & 1 di ArUco adalah sisi ATAS/FRONT)
+                c0, c1 = c[0], c[1]
+                top_mid_x = float(c0[0] + c1[0]) / 2.0
+                top_mid_y = float(c0[1] + c1[1]) / 2.0
+
+                dir_x = top_mid_x - center_x
+                dir_y = top_mid_y - center_y
+                dist_dir = math.sqrt(dir_x**2 + dir_y**2)
+                if dist_dir > 1e-3:
+                    ux = dir_x / dist_dir
+                    uy = dir_y / dist_dir
+                else:
+                    ux, uy = 0.0, -1.0
+
+                # ── EMA Smoothing: pose + 2D front vector ──
+                alpha = self._pose_ema_alpha
+                mid = int(marker_id)
+                if mid not in self._pose_smooth:
+                    self._pose_smooth[mid] = {
+                        'rvec':     rvec.copy(),
+                        'tvec':     tvec.copy(),
+                        'cx':       center_x,
+                        'cy':       center_y,
+                        'ux':       ux,
+                        'uy':       uy,
+                        'side_len': dist_dir,
+                    }
+                else:
+                    prev = self._pose_smooth[mid]
+                    self._pose_smooth[mid]['rvec']     = alpha * rvec       + (1 - alpha) * prev['rvec']
+                    self._pose_smooth[mid]['tvec']     = alpha * tvec       + (1 - alpha) * prev['tvec']
+                    self._pose_smooth[mid]['cx']       = alpha * center_x   + (1 - alpha) * prev['cx']
+                    self._pose_smooth[mid]['cy']       = alpha * center_y   + (1 - alpha) * prev['cy']
+                    self._pose_smooth[mid]['ux']       = alpha * ux         + (1 - alpha) * prev.get('ux', ux)
+                    self._pose_smooth[mid]['uy']       = alpha * uy         + (1 - alpha) * prev.get('uy', uy)
+                    self._pose_smooth[mid]['side_len'] = alpha * dist_dir + (1 - alpha) * prev.get('side_len', dist_dir)
+
+                s_rvec = self._pose_smooth[mid]['rvec']
+                s_tvec = self._pose_smooth[mid]['tvec']
+                s_cx   = self._pose_smooth[mid]['cx']
+                s_cy   = self._pose_smooth[mid]['cy']
+                s_ux   = self._pose_smooth[mid]['ux']
+                s_uy   = self._pose_smooth[mid]['uy']
+                s_side = self._pose_smooth[mid]['side_len']
+
+                # Normalisasi smoothed front unit vector
+                norm_u = math.sqrt(s_ux**2 + s_uy**2)
+                if norm_u > 1e-3:
+                    s_ux /= norm_u
+                    s_uy /= norm_u
+                else:
+                    s_ux, s_uy = 0.0, -1.0
+
+                # Project s_tvec ke pixel — ini yang mission_centering gunakan sebagai error.
+                try:
+                    proj_pt, _ = cv2.projectPoints(
+                        np.array([[s_tvec[0], s_tvec[1], s_tvec[2]]], dtype=np.float32),
+                        np.zeros((3, 1), dtype=np.float32),   # rvec = identity (titik sudah di cam frame)
+                        np.zeros((3, 1), dtype=np.float32),   # tvec = zero
+                        self.camera_matrix, self.dist_coeffs
+                    )
+                    tvec_px = (int(proj_pt[0][0][0]), int(proj_pt[0][0][1]))
+                except Exception:
+                    tvec_px = (int(s_cx), int(s_cy))  # fallback
+
+                # Panah 2D FRONT marker: stabil, mulus, dan tepat menunjuk sisi depan marker
+                arrow_len = max(40, int(s_side * 1.5))
+                front_px = (int(tvec_px[0] + arrow_len * s_ux), int(tvec_px[1] + arrow_len * s_uy))
+
                 detections.append({
-                    'id': int(marker_id),
-                    'center': [center_x, center_y],
-                    'corners': c.tolist(),
-                    'pose_tvec': [float(tvec[0]), float(tvec[1]), float(tvec[2])],
-                    'pose_rvec': [float(rvec[0]), float(rvec[1]), float(rvec[2])]
+                    'id':            int(marker_id),
+                    'center':        [center_x, center_y],        # raw pixel
+                    'center_smooth': [s_cx, s_cy],                # EMA-smoothed pixel
+                    'tvec_px':       list(tvec_px),               # proyeksi s_tvec ke pixel (= titik yg dipakai mission PID)
+                    'front_px':      list(front_px) if front_px else None, # proyeksi titik FRONT marker
+                    'corners':       c.tolist(),
+                    'pose_tvec':     [float(s_tvec[0]), float(s_tvec[1]), float(s_tvec[2])],
+                    'pose_rvec':     [float(s_rvec[0]), float(s_rvec[1]), float(s_rvec[2])],
+                    'pose_tvec_raw': [float(tvec[0]), float(tvec[1]), float(tvec[2])],
+                    'pose_rvec_raw': [float(rvec[0]), float(rvec[1]), float(rvec[2])],
                 })
 
-                # Draw axes
-                cv2.drawFrameAxes(
-                    frame, self.camera_matrix, self.dist_coeffs,
-                    rvec, tvec, self.marker_length * 0.5
-                )
+                # drawFrameAxes dihapus — 3 panah XYZ (merah/hijau/biru) sangat noisy
+                # dan membingungkan pengamat. Visualisasi heading sudah ditangani
+                # oleh panah FRONT (smoothed EMA) di _draw_stream_overlay.
 
-                # Broadcast TF
+                # Broadcast TF — gunakan smoothed pose agar konsisten dengan visualisasi
                 t = TransformStamped()
                 t.header.stamp    = self.get_clock().now().to_msg()
                 t.header.frame_id = 'camera_link'
                 t.child_frame_id  = f'aruco_marker_{int(marker_id)}'
-                t.transform.translation.x = float(tvec[0])
-                t.transform.translation.y = float(tvec[1])
-                t.transform.translation.z = float(tvec[2])
-                qx, qy, qz, qw = rotvec2quat(rvec)
+                t.transform.translation.x = float(s_tvec[0])
+                t.transform.translation.y = float(s_tvec[1])
+                t.transform.translation.z = float(s_tvec[2])
+                qx, qy, qz, qw = rotvec2quat(s_rvec)
                 t.transform.rotation.x = qx
                 t.transform.rotation.y = qy
                 t.transform.rotation.z = qz
@@ -590,137 +712,111 @@ class ArucoReceiverNode(Node):
 
 
     def _draw_stream_overlay(self, frame, count, detections):
-        """Gambar HUD overlay di atas frame sebelum di-encode ke MJPEG."""
+        """
+        HUD Stream Overlay Minimalis (Port 8086).
+        Menampilkan:
+          1. Top HUD Banner (ID, Dist, Yaw, Status IN ZONE / ALIGNING / CENTERING)
+          2. Center Crosshair (kamera) + Lingkaran Zona Toleransi Tipis (2.5 cm)
+          3. Garis Vector Error + Single Target Dot
+          4. Panah 3D FRONT Marker (mengindikasikan arah heading depan target)
+        """
         h, w = frame.shape[:2]
+        cx_frame, cy_frame = w // 2, h // 2
 
-        # ── Status bar pojok kiri atas ─────────────────────────────────
+        tol_m = 0.025        # 2.5 cm (sesuai error_threshold di vtol_config.yaml)
+        yaw_tol_rad = 0.075  # ~4.3 deg (sesuai yaw_error_threshold di vtol_config.yaml)
+
+        # ── 1. Center Crosshair + Lingkaran Toleransi Tipis ───────────
+        fx = float(self.camera_matrix[0, 0])
+        tz_ref = 1.0
+        if detections and 'pose_tvec' in detections[0]:
+            tz_ref = max(0.1, detections[0]['pose_tvec'][2])
+
+        tol_px = int(fx * tol_m / tz_ref)
+        tol_px = max(6, min(tol_px, min(w, h) // 3))
+
+        # Lingkaran toleransi di pusat kamera
+        cv2.circle(frame, (cx_frame, cy_frame), tol_px, (0, 220, 80), 1, cv2.LINE_AA)
+
+        cross_len = 10
+        cv2.line(frame, (cx_frame - cross_len, cy_frame), (cx_frame + cross_len, cy_frame), (220, 220, 220), 1, cv2.LINE_AA)
+        cv2.line(frame, (cx_frame, cy_frame - cross_len), (cx_frame, cy_frame + cross_len), (220, 220, 220), 1, cv2.LINE_AA)
+
+        # ── 2. Top HUD Banner (Compact Bar) ───────────────────────────
+        bar_h = 34
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (w, bar_h), (12, 12, 12), -1)
+        cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
+        cv2.line(frame, (0, bar_h), (w, bar_h), (50, 50, 50), 1)
+
         n_markers = len(detections)
-        status_color = (0, 220, 0) if n_markers > 0 else (0, 80, 220)
-        status_text = f"Frame #{count}  |  Marker: {n_markers}"
-        cv2.rectangle(frame, (0, 0), (w, 30), (0, 0, 0), -1)
-        cv2.putText(frame, status_text, (8, 21),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.65, status_color, 2, cv2.LINE_AA)
+        if n_markers == 0:
+            cv2.putText(frame, "SEARCHING FOR MARKER...", (12, 23),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (80, 150, 255), 1, cv2.LINE_AA)
+            cv2.putText(frame, f"#{count}", (w - 60, 23),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (120, 120, 120), 1, cv2.LINE_AA)
+            return
 
-        # ── Info per marker ────────────────────────────────────────────
-        for det in detections:
-            marker_id = det['id']
-            cx, cy = det['center']
-            norm_ex = (cx - w / 2.0) / (w / 2.0)
-            norm_ey = (cy - h / 2.0) / (h / 2.0)
+        det = detections[0]
+        marker_id = det['id']
+        tvec_px = det.get('tvec_px', det['center'])
+        mx, my = int(tvec_px[0]), int(tvec_px[1])
+        mx = max(0, min(w - 1, mx))
+        my = max(0, min(h - 1, my))
 
-            cx_i, cy_i = int(cx), int(cy)
-            cv2.circle(frame, (cx_i, cy_i), 5, (0, 255, 255), -1)
+        tx_m, ty_m, tz_m = 0.0, 0.0, 1.0
+        if 'pose_tvec' in det:
+            tx_m, ty_m, tz_m = det['pose_tvec']
+        dist_m = math.sqrt(tx_m**2 + ty_m**2)
 
-            # Menampilkan koordinat 3D di HUD jika tersedia
-            x_m, y_m, z_m = 0.0, 0.0, 0.0
-            if 'pose_tvec' in det:
-                x_m, y_m, z_m = det['pose_tvec']
+        yaw_rad = 0.0
+        if 'pose_rvec' in det:
+            yaw_rad = get_yaw_from_rvec(det['pose_rvec'])
+        yaw_deg = math.degrees(yaw_rad)
 
-            # Yaw error dan arahnya
-            yaw_hint = ''
-            if 'pose_rvec' in det:
-                import math
-                rvec_z = det['pose_rvec'][2]
-                # Wrap ke [-pi, pi]
-                rvec_z = (rvec_z + math.pi) % (2 * math.pi) - math.pi
-                yaw_deg = math.degrees(rvec_z)
-                if abs(rvec_z) < 0.1:
-                    yaw_hint = f"Yaw: {rvec_z:+.2f}r ({yaw_deg:+.0f}deg) OK"
-                elif rvec_z > 0:
-                    yaw_hint = f"Yaw: {rvec_z:+.2f}r ({yaw_deg:+.0f}deg) -> YAW RIGHT"
-                else:
-                    yaw_hint = f"Yaw: {rvec_z:+.2f}r ({yaw_deg:+.0f}deg) -> YAW LEFT"
+        is_xy_ok = (dist_m <= tol_m)
+        is_yaw_ok = (abs(yaw_rad) <= yaw_tol_rad)
+        in_zone = is_xy_ok and is_yaw_ok
 
-            lines = [
-                (f"ID: {marker_id}", 0.9, (0, 255, 0), 2),
-                (f"XYZ: ({x_m:+.2f}, {y_m:+.2f}, {z_m:+.2f}) m", 0.55, (0, 220, 255), 1),
-                (f"px ({cx_i}, {cy_i})",   0.55, (255, 255, 255), 1),
-            ]
-            if yaw_hint:
-                lines.append((yaw_hint, 0.5, (220, 100, 255), 1))
+        status_text = "IN ZONE" if in_zone else ("ALIGNING YAW" if not is_yaw_ok else "CENTERING")
+        status_color = (0, 230, 90) if in_zone else ((0, 160, 255) if not is_yaw_ok else (0, 90, 255))
 
-            line_h = 24
-            text_y = cy_i - 10 - len(lines) * line_h
-            text_y = max(text_y, 35)
+        # Text banner utama
+        info_str = f"MARKER #{marker_id}  |  DIST: {dist_m:.3f}m (tol {tol_m*100:.1f}cm)  |  YAW: {yaw_deg:+.1f}°"
+        cv2.putText(frame, info_str, (12, 23),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.48, (230, 230, 230), 1, cv2.LINE_AA)
 
-            for text, scale, color, thickness in lines:
-                (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
-                tx = max(4, min(cx_i - tw // 2, w - tw - 4))
-                cv2.putText(frame, text, (tx + 1, text_y + 1),
-                            cv2.FONT_HERSHEY_SIMPLEX, scale, (0, 0, 0), thickness + 1, cv2.LINE_AA)
-                cv2.putText(frame, text, (tx, text_y),
-                            cv2.FONT_HERSHEY_SIMPLEX, scale, color, thickness, cv2.LINE_AA)
-                text_y += line_h
+        # Status Badge (Kanan Atas)
+        (tw, _), _ = cv2.getTextSize(status_text, cv2.FONT_HERSHEY_SIMPLEX, 0.48, 2)
+        cv2.rectangle(frame, (w - tw - 20, 5), (w - 8, bar_h - 5), (30, 30, 30), -1)
+        cv2.rectangle(frame, (w - tw - 20, 5), (w - 8, bar_h - 5), status_color, 1)
+        cv2.putText(frame, status_text, (w - tw - 14, 22),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.48, status_color, 1, cv2.LINE_AA)
 
-            on_center = abs(norm_ex) < 0.15 and abs(norm_ey) < 0.15
-            box_color = (0, 255, 0) if on_center else (0, 165, 255)
-            cv2.line(frame, (cx_i, cy_i - 5), (cx_i, text_y - line_h + 5), box_color, 1, cv2.LINE_AA)
+        # ── 3. Vector Garis Error & Single Target Dot ─────────────────
+        target_color = (0, 230, 90) if is_xy_ok else (0, 90, 255)
+        # Garis penghubung pusat kamera ke marker
+        cv2.line(frame, (cx_frame, cy_frame), (mx, my), (0, 0, 0), 3, cv2.LINE_AA)
+        cv2.line(frame, (cx_frame, cy_frame), (mx, my), target_color, 2, cv2.LINE_AA)
 
-            # ── FRONT heading arrow ────────────────────────────────────
-            # Project titik Y+ lokal marker (sisi depan/atas marker) ke image plane
-            # Arah Y+ dalam koordinat marker = sisi "atas" marker = depan ArUco
-            if 'pose_tvec' in det and 'pose_rvec' in det:
-                try:
-                    rvec_arr = np.array(det['pose_rvec'], dtype=np.float32).reshape(3, 1)
-                    tvec_arr = np.array(det['pose_tvec'], dtype=np.float32).reshape(3, 1)
+        # Titik Target Marker Single (Bersih)
+        cv2.circle(frame, (mx, my), 6, (0, 0, 0), -1)
+        cv2.circle(frame, (mx, my), 4, target_color, -1)
 
-                    # Panjang panah = setengah sisi marker (proporsional)
-                    arrow_len = self.marker_length * 0.6
+        # ── 4. Panah 3D FRONT Marker (Target Heading) ────────────────
+        front_px = det.get('front_px')
+        if front_px:
+            fx_p, fy_p = int(front_px[0]), int(front_px[1])
+            front_color = (0, 235, 255)  # Cyan/Kuning cerah
+            cv2.arrowedLine(frame, (mx, my), (fx_p, fy_p), (0, 0, 0), 4, tipLength=0.25, line_type=cv2.LINE_AA)
+            cv2.arrowedLine(frame, (mx, my), (fx_p, fy_p), front_color, 2, tipLength=0.25, line_type=cv2.LINE_AA)
 
-                    # Titik asal (center marker) dan titik ujung (Y+ = arah FRONT)
-                    obj_origin = np.array([[0.0, 0.0, 0.0]], dtype=np.float32)
-                    obj_front  = np.array([[0.0, -arrow_len, 0.0]], dtype=np.float32)
+            # Label FRONT
+            cv2.putText(frame, "FRONT ^", (fx_p + 4, fy_p + 4),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 0), 3, cv2.LINE_AA)
+            cv2.putText(frame, "FRONT ^", (fx_p + 3, fy_p + 3),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, front_color, 1, cv2.LINE_AA)
 
-                    img_origin, _ = cv2.projectPoints(
-                        obj_origin, rvec_arr, tvec_arr,
-                        self.camera_matrix, self.dist_coeffs
-                    )
-                    img_front, _ = cv2.projectPoints(
-                        obj_front, rvec_arr, tvec_arr,
-                        self.camera_matrix, self.dist_coeffs
-                    )
-
-                    p_origin = tuple(img_origin[0][0].astype(int))
-                    p_front  = tuple(img_front[0][0].astype(int))
-
-                    # Clamp ke batas frame
-                    p_origin = (
-                        max(0, min(w - 1, p_origin[0])),
-                        max(0, min(h - 1, p_origin[1]))
-                    )
-                    p_front = (
-                        max(0, min(w - 1, p_front[0])),
-                        max(0, min(h - 1, p_front[1]))
-                    )
-
-                    # Gambar panah magenta tebal
-                    cv2.arrowedLine(
-                        frame, p_origin, p_front,
-                        (255, 60, 255),   # magenta
-                        3, cv2.LINE_AA, tipLength=0.35
-                    )
-                    # Shadow tipis untuk kontras
-                    cv2.arrowedLine(
-                        frame, p_origin, p_front,
-                        (0, 0, 0), 5, cv2.LINE_AA, tipLength=0.35
-                    )
-                    cv2.arrowedLine(
-                        frame, p_origin, p_front,
-                        (255, 60, 255), 3, cv2.LINE_AA, tipLength=0.35
-                    )
-
-                    # Label "FRONT" di ujung panah
-                    label = "FRONT"
-                    (lw, lh), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-                    lx = max(2, min(w - lw - 2, p_front[0] - lw // 2))
-                    ly = max(lh + 4, min(h - 4, p_front[1] - 6))
-                    cv2.putText(frame, label, (lx + 1, ly + 1),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 3, cv2.LINE_AA)
-                    cv2.putText(frame, label, (lx, ly),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 255), 2, cv2.LINE_AA)
-
-                except Exception:
-                    pass  # Jika proyeksi gagal, skip saja — jangan crash
 
     # ------------------------------------------------------------------
     # ROS Image conversion

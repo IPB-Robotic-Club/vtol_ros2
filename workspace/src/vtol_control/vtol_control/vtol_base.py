@@ -227,6 +227,12 @@ class VtolBaseNode(Node):
             return False
 
         # 3. Climb
+        # Slow-down zone: throttle dikurangi proporsional saat mendekati target altitude
+        # untuk mencegah LOITER altitude controller overshoot/osilasi fighting dengan RC override.
+        SLOWDOWN_ZONE = 0.5   # meter sebelum target mulai kurangi throttle
+        THROTTLE_MIN  = 1515  # throttle minimal saat di dalam slow-down zone (cukup untuk loft halus)
+        throttle_range = throttle - THROTTLE_MIN  # rentang throttle dari min ke full climb
+
         self.get_logger().info("Drone successfully ARMED! Climbing...")
         self.rc_channels[0] = 1500 # Roll
         self.rc_channels[1] = 1500 # Pitch
@@ -234,12 +240,12 @@ class VtolBaseNode(Node):
         self.rc_channels[3] = 1500 # Yaw
         if not self.rc_timer:
             self.publish_rc()
-        
+
         start_time = time.time()
         while rclpy.ok():
             current_time = time.time()
             elapsed = current_time - start_time
-            
+
             # Watchdog check: connection
             if self.state_received and not self.current_state.connected:
                 self.get_logger().error("Autopilot disconnected during takeoff! Aborting.")
@@ -251,20 +257,37 @@ class VtolBaseNode(Node):
                 self.get_logger().warn(f"Manual override detected during takeoff! Flight mode changed to {self.current_state.mode}. Aborting flight.")
                 self.abort_flight()
                 return False
-                
+
             current_alt = self.get_current_altitude()
+
             if current_alt >= target_altitude:
-                self.get_logger().info(f"Target altitude reached ({current_alt:.2f}m >= {target_altitude}m).")
+                self.get_logger().info(f"Target altitude reached ({current_alt:.2f}m >= {target_altitude}m). Neutralizing throttle.")
+                # Netralkan throttle segera agar tidak ada jeda climb sebelum hover/PID mengambil alih
+                self.rc_channels[2] = 1500
                 return True
-                
+
             if elapsed > timeout:
                 self.get_logger().error(f"Takeoff timeout! Failed to reach {target_altitude}m in {timeout}s. Current alt: {current_alt:.2f}m. Aborting.")
                 self.abort_flight()
                 return False
-                
-            self.get_logger().info(f"Climbing... alt: {current_alt:.2f}m/{target_altitude}m, throttle: {throttle}, elapsed: {elapsed:.1f}s", throttle_duration_sec=1.0)
+
+            # Slow-down zone: kurangi throttle proporsional saat mendekati target
+            altitude_remaining = target_altitude - current_alt
+            if altitude_remaining <= SLOWDOWN_ZONE and throttle_range > 0:
+                # Linear interpolasi: 0m sisa → THROTTLE_MIN, SLOWDOWN_ZONE sisa → throttle penuh
+                ratio = altitude_remaining / SLOWDOWN_ZONE
+                effective_throttle = int(THROTTLE_MIN + ratio * throttle_range)
+            else:
+                effective_throttle = throttle
+
+            self.rc_channels[2] = effective_throttle
+            self.get_logger().info(
+                f"Climbing... alt: {current_alt:.2f}m/{target_altitude}m, "
+                f"throttle: {effective_throttle}, elapsed: {elapsed:.1f}s",
+                throttle_duration_sec=1.0
+            )
             rclpy.spin_once(self, timeout_sec=0.1)
-            
+
         return False
 
     def hover(self, duration_seconds):

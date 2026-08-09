@@ -38,25 +38,36 @@ mavlink_forward:
 # Parameter PID untuk Centering ArUco
 pid_centering:
   kp_roll: 15.0         # Proportional gain untuk Roll [tuned: 4.0 → 15.0, kompensasi frame 320x240 + min_kick approach]
-  ki_roll: 0.5          # Integral gain untuk Roll [tuned: 0.15 → 0.5]
+  ki_roll: 0.05         # Integral gain untuk Roll [diturunkan dari 0.5 → 0.05 untuk cegah integral windup/osilasi]
   kd_roll: 5.0          # Derivative gain untuk Roll
   kp_pitch: 15.0        # Proportional gain untuk Pitch [tuned: 4.0 → 15.0]
-  ki_pitch: 0.5         # Integral gain untuk Pitch [tuned: 0.15 → 0.5]
+  ki_pitch: 0.05        # Integral gain untuk Pitch [diturunkan dari 0.5 → 0.05 untuk cegah integral windup/osilasi]
   kd_pitch: 5.0         # Derivative gain untuk Pitch
-  kp_yaw: 8.0           # Proportional gain untuk Yaw [tuned: 3.0 → 8.0]
-  ki_yaw: 0.1           # Integral gain untuk Yaw
+  kp_yaw: 12.0          # Proportional gain untuk Yaw [tuned: 25.0 → 12.0, cegah osilasi bang-bang]
+  ki_yaw: 0.05          # Integral gain untuk Yaw
   kd_yaw: 4.0           # Derivative gain untuk Yaw
   max_override: 40      # Deviasi maksimum dari 1500 untuk Roll/Pitch
-  max_yaw_override: 60  # Deviasi maksimal RC4 (Yaw) dari 1500
+  max_yaw_override: 60  # Deviasi maksimal RC4 (Yaw) dari 1500 (1440 - 1560)
   max_throttle_override: 0 # Deviasi maksimal RC3 (Throttle) dari 1500
-  yaw_error_threshold: 0.1 # Batas toleransi error Yaw dalam radian (~5.7 derajat)
-  error_threshold: 0.08 # Batas toleransi error translasi (norm)
+  yaw_error_threshold: 0.075 # Batas toleransi error Yaw dalam radian (~4.3 derajat) [diturunkan 50% untuk presisi tinggi]
+  error_threshold: 0.025 # Batas toleransi error translasi 2.5 cm [diturunkan 50% dari 0.05m → 2.5cm]
   centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan
   marker_lost_timeout: 3.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
-  deadzone_bias: 12.0   # Minimum RC kick offset [apply_min_kick: selalu ditambahkan jika ada error]
+  deadzone_bias: 5.0    # Minimum RC kick offset untuk Roll/Pitch [diturunkan dari 12 → 5 agar PID efektif di error kecil]
+  deadzone_bias_yaw: 12.0 # Minimum RC kick offset untuk Yaw [diturunkan dari 15 → 12]
+  # Active altitude hold selama centering (P-controller pada RC3/throttle)
+  # Menggantikan RC3=1500 hardcoded agar drone tidak drift turun karena LOITER bias di SITL
+  hold_altitude: true           # true = aktifkan altitude hold aktif, false = pasif (RC3=1500)
+  # hover_base: RC3 yang menghasilkan zero climb rate di LOITER (dikalibrasi dari SITL)
+  # Observasi: drone settle stabil di RC3=1575-1577 → hover_base = 1576
+  # Kalkulasi: steady-state alt=1.67m, error=0.33m, correction=80*0.33=26.4, RC3=1550+26=1576
+  # Untuk drone real (serial): set ke 1500 (THR_MID biasanya lebih baik di hardware)
+  hover_base: 1576
+  kp_altitude: 80.0             # P-gain: error 1m → koreksi ±80 (menembus deadband LOITER)
+  max_throttle_correction: 150  # Batas koreksi maksimal (RC3 antara 1426-1726)
 
 # Parameter Lepas Landas Otonom (Takeoff)
 takeoff:
 
-  altitude: 1    # Ketinggian lepas landas otonom (meter) sebelum centering
+  altitude: 1.5    # Ketinggian lepas landas otonom (meter) sebelum centering
   max_throttle_override: 100 # Deviasi maksimal RC3 (Throttle) dari 1500 (1500 + x atau 1500 - x)

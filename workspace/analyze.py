@@ -12,7 +12,7 @@ def load_data(csv_path):
     with open(csv_path, 'r') as f:
         reader = csv.reader(f)
         for row in reader:
-            if row and len(row) > 0 and row[0] == 'PID':
+            if row and len(row) > 0 and row[0] in ('PID', 'YAW'):
                 rows.append(row)
     return rows
 
@@ -20,26 +20,34 @@ def run_correlation(rows):
     times = []
     nx = []
     ny = []
+    yaw_err = []
     rc_r = []
     rc_p = []
+    rc_y = []
     
     for row in rows:
         try:
             times.append(float(row[1]))
             nx.append(float(row[9]))
             ny.append(float(row[10]))
-            rc_r.append(float(row[19]) - 1500)
-            rc_p.append(float(row[25]) - 1500)
+            y_err = float(row[13]) if (len(row) > 13 and row[13] != '') else 0.0
+            yaw_err.append(y_err)
+            rc_r.append(float(row[21]) - 1500 if (len(row) > 21 and row[21] != '') else 0.0)
+            rc_p.append(float(row[27]) - 1500 if (len(row) > 27 and row[27] != '') else 0.0)
+            rc_y.append(float(row[33]) - 1500 if (len(row) > 33 and row[33] != '') else 0.0)
         except (ValueError, IndexError):
             continue
 
-    print(f"Total PID rows: {len(times)}")
+    print(f"Total PID/YAW rows: {len(times)}")
     if len(times) > 1:
         dnx = [nx[i] - nx[i-1] for i in range(1, len(nx))]
         rc_r_prev = rc_r[:-1]
         
         dny = [ny[i] - ny[i-1] for i in range(1, len(ny))]
         rc_p_prev = rc_p[:-1]
+
+        dyaw = [yaw_err[i] - yaw_err[i-1] for i in range(1, len(yaw_err))]
+        rc_y_prev = rc_y[:-1]
 
         def corr(x, y):
             n = len(x)
@@ -51,8 +59,9 @@ def run_correlation(rows):
             if denom == 0: return 0
             return (n * sum_xy - sum_x * sum_y) / denom
 
-        print(f"Roll correlation: {corr(rc_r_prev, dnx):.6f}")
+        print(f"Roll correlation:  {corr(rc_r_prev, dnx):.6f}")
         print(f"Pitch correlation: {corr(rc_p_prev, dny):.6f}")
+        print(f"Yaw correlation:   {corr(rc_y_prev, dyaw):.6f}")
 
 def print_pitch_data(rows, start, end):
     print("Time, Err_Y, RC_P")
@@ -64,7 +73,7 @@ def print_pitch_data(rows, start, end):
     for i in range(start, end):
         row = rows[i]
         try:
-            print(f"{row[1]}, {float(row[10]):.3f}, {row[25]}")
+            print(f"{row[1]}, {float(row[10]):.3f}, {row[27]}")
         except (ValueError, IndexError):
             continue
 
@@ -78,9 +87,26 @@ def print_roll_data(rows, start, end):
     for i in range(start, end):
         row = rows[i]
         try:
-            print(f"{row[1]}, {float(row[9]):.3f}, {row[19]}")
+            print(f"{row[1]}, {float(row[9]):.3f}, {row[21]}")
         except (ValueError, IndexError):
             continue
+
+def print_yaw_data(rows, start, end):
+    print("Time, Yaw_Err(rad), RC_Y")
+    total = len(rows)
+    if total == 0:
+        return
+    start = max(0, min(start, total - 1))
+    end = max(0, min(end, total))
+    for i in range(start, end):
+        row = rows[i]
+        try:
+            yaw_val = float(row[13]) if (len(row) > 13 and row[13] != '') else 0.0
+            rc_y_val = row[33] if len(row) > 33 else ''
+            print(f"{row[1]}, {yaw_val:.3f}, {rc_y_val}")
+        except (ValueError, IndexError):
+            continue
+
 
 def analyze_vision_log(filepath):
     if not os.path.exists(filepath):
@@ -253,8 +279,8 @@ def main():
                         help="Path to the aruco vision log file")
     parser.add_argument('--mission-log', '-ml', type=str, default=None,
                         help="Path to the mission centering log file")
-    parser.add_argument('--mode', '-m', type=str, choices=['correlation', 'pitch', 'roll', 'vision', 'mission', 'all'], default='all',
-                        help="Analysis mode: correlation, pitch, roll, vision, mission, or all (default: all)")
+    parser.add_argument('--mode', '-m', type=str, choices=['correlation', 'pitch', 'roll', 'yaw', 'vision', 'mission', 'all'], default='all',
+                        help="Analysis mode: correlation, pitch, roll, yaw, vision, mission, or all (default: all)")
     parser.add_argument('--start', '-s', type=int, default=100,
                         help="Start index for printing detailed data (default: 100)")
     parser.add_argument('--end', '-e', type=int, default=120,
@@ -308,7 +334,7 @@ def main():
                 mission_path = script_dir_ml
 
     # Execute selected modes
-    if args.mode in ('correlation', 'pitch', 'roll', 'all'):
+    if args.mode in ('correlation', 'pitch', 'roll', 'yaw', 'all'):
         print(f"=== Centering Data Analysis ({csv_path}) ===")
         rows = load_data(csv_path)
         if rows:
@@ -323,6 +349,10 @@ def main():
             if args.mode in ('roll', 'all'):
                 print(f"\n--- Roll Data (Indices {args.start} to {args.end}) ---")
                 print_roll_data(rows, args.start, args.end)
+
+            if args.mode in ('yaw', 'all'):
+                print(f"\n--- Yaw Data (Indices {args.start} to {args.end}) ---")
+                print_yaw_data(rows, args.start, args.end)
         else:
             print("Failed to load centering data CSV.")
 
