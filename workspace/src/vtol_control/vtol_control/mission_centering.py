@@ -379,23 +379,10 @@ class MissionCenteringNode(VtolBaseNode):
 
     def _compute_altitude_hold_rc3(self):
         """
-        Hitung nilai RC3 (throttle) untuk active altitude hold menggunakan P-controller.
+        Hitung nilai RC3 (throttle) untuk active altitude hold menggunakan method terpusat VtolBaseNode.
         Tujuan: mempertahankan self.takeoff_altitude selama fase centering.
-
-        Formula: RC3 = hover_base + kp_altitude × (target_alt − current_alt)
-          - hover_base: titik RC3 yang sesuai dengan zero-climb-rate di LOITER.
-            Di SITL ini ~1545-1550 (bukan 1500 karena THR_MID bias).
-          - Saat error=0 → RC3=hover_base → drone maintain altitude
-          - Saat di bawah target → RC3>hover_base → drone naik
-          - Saat di atas target → RC3<hover_base → drone turun
         """
-        if not self.alt_hold_enabled:
-            return 1500
-        current_alt = self.get_current_altitude()
-        alt_error   = self.takeoff_altitude - current_alt
-        correction  = self.kp_altitude * alt_error
-        correction  = max(min(correction, self.max_alt_correction), -self.max_alt_correction)
-        return int(self.hover_base + correction)
+        return self.compute_altitude_hold_rc3(target_altitude=self.takeoff_altitude)
 
     def run_pid_and_set_rc(self, current_time):
         """
@@ -606,58 +593,10 @@ class MissionCenteringNode(VtolBaseNode):
 
     def _stabilize_with_altitude_hold(self, duration_seconds):
         """
-        Hover selama duration_seconds dengan active altitude hold (RC3 P-controller).
-        Menggantikan base class hover() yang pakai RC3=1500 hardcoded.
-        RC3=1500 di LOITER ArduPilot SITL menyebabkan drone turun karena deadband/THR_MID bias.
-        Dengan P-controller, RC3 dikoreksi setiap iterasi agar drone tidak drift.
+        Hover selama duration_seconds dengan active altitude hold.
+        Memanggil method hover() terpusat di VtolBaseNode.
         """
-        import rclpy as _rclpy
-        self.write_log(
-            f"Stabilisasi {duration_seconds}s dengan altitude hold aktif "
-            f"(target={self.takeoff_altitude:.1f}m)..."
-        )
-        start_time = self.get_current_time()
-
-        while _rclpy.ok():
-            elapsed = self.get_current_time() - start_time
-
-            # Watchdog: koneksi
-            if self.state_received and not self.current_state.connected:
-                self.get_logger().error("Autopilot disconnected during stabilize! Aborting.")
-                self.abort_flight()
-                return False
-
-            # Watchdog: mode change
-            if self.current_state.mode not in ["LOITER", "CMODE(5)"]:
-                self.get_logger().warn(
-                    f"Mode berubah ke {self.current_state.mode} saat stabilisasi! Abort."
-                )
-                self.abort_flight()
-                return False
-
-            if elapsed >= duration_seconds:
-                self.write_log(
-                    f"Stabilisasi selesai ({duration_seconds:.0f}s). "
-                    f"Alt akhir: {self.get_current_altitude():.3f}m"
-                )
-                return True
-
-            # Active altitude hold — RC3 dikoreksi, BUKAN hardcoded 1500
-            rc3 = self._compute_altitude_hold_rc3()
-            self.rc_channels[0] = 1500
-            self.rc_channels[1] = 1500
-            self.rc_channels[2] = rc3
-            self.rc_channels[3] = 1500
-
-            current_alt = self.get_current_altitude()
-            self.get_logger().info(
-                f"[STAB] {elapsed:.1f}s/{duration_seconds:.0f}s | "
-                f"alt={current_alt:.3f}m err={self.takeoff_altitude - current_alt:+.3f}m RC3={rc3}",
-                throttle_duration_sec=0.5
-            )
-            _rclpy.spin_once(self, timeout_sec=0.05)
-
-        return False
+        return self.hover(duration_seconds, target_altitude=self.takeoff_altitude)
 
     def execute_centering(self):
         self.write_log("Menunggu marker ArUco terdeteksi...")

@@ -35,14 +35,14 @@ class TestTakeoffNode(VtolBaseNode):
                 self.abort_flight()
                 return
 
-            # Maintain neutral RC channels
+            # Maintain active altitude hold RC channels
             self.rc_channels[0] = 1500
             self.rc_channels[1] = 1500
-            self.rc_channels[2] = 1500
+            self.rc_channels[2] = self.compute_altitude_hold_rc3()
             self.rc_channels[3] = 1500
 
             alt = self.get_current_altitude()
-            self.get_logger().info(f"[HOVERING] Altitude: {alt:.2f}m | Mode: {self.current_state.mode}", throttle_duration_sec=2.0)
+            self.get_logger().info(f"[HOVERING] Altitude: {alt:.2f}m | RC3: {self.rc_channels[2]} | Mode: {self.current_state.mode}", throttle_duration_sec=2.0)
             rclpy.spin_once(self, timeout_sec=0.1)
 
 def main(args=None):

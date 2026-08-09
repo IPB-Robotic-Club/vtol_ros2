@@ -27,13 +27,20 @@ class VtolBaseNode(Node):
         )
 
         # Deteksi profil aktif: 'tcp' = SITL, 'serial' = drone real
-        from vtol_control.config_reader import get_active_profile, get_takeoff_config
+        from vtol_control.config_reader import get_active_profile, get_takeoff_config, get_pid_config
         self._active_profile = get_active_profile()
         # Sumber altitude: False = local_position/pose.z (SITL), True = rangefinder_1 (real)
         self.use_rangefinder = (self._active_profile == 'serial')
 
         takeoff_config = get_takeoff_config()
         self.max_throttle_override = takeoff_config.get('max_throttle_override', 30)
+
+        # Active altitude hold parameters (terpusat di VtolBaseNode)
+        pid_config = get_pid_config()
+        self.alt_hold_enabled = pid_config.get('hold_altitude', True)
+        self.kp_altitude = pid_config.get('kp_altitude', 80.0)
+        self.hover_base = pid_config.get('hover_base', 1576)
+        self.max_alt_correction = pid_config.get('max_throttle_correction', 150)
 
         # Telemetry State Variables
         self.current_state = State()
@@ -290,15 +297,34 @@ class VtolBaseNode(Node):
 
         return False
 
-    def hover(self, duration_seconds):
-        """Synchronously hovers for duration_seconds by holding neutral throttle."""
-        self.get_logger().info(f"Entering Hover phase for {duration_seconds} seconds...")
-        self.rc_channels[0] = 1500
-        self.rc_channels[1] = 1500
-        self.rc_channels[2] = 1500 # Neutral throttle
-        self.rc_channels[3] = 1500
-        if not self.rc_timer:
-            self.publish_rc()
+    def compute_altitude_hold_rc3(self, target_altitude=None) -> int:
+        """
+        Hitung nilai RC3 (throttle) untuk active altitude hold menggunakan P-controller.
+        Tujuan: mempertahankan target_altitude selama fase hover/centering.
+
+        Formula: RC3 = hover_base + kp_altitude × (target_alt − current_alt)
+        Clamped by max_alt_correction.
+        """
+        if not self.alt_hold_enabled:
+            return 1500
+
+        if target_altitude is None:
+            from vtol_control.config_reader import get_takeoff_config
+            target_altitude = get_takeoff_config().get('altitude', 1.5)
+
+        current_alt = self.get_current_altitude()
+        alt_error = target_altitude - current_alt
+        correction = self.kp_altitude * alt_error
+        correction = max(min(correction, self.max_alt_correction), -self.max_alt_correction)
+        return int(self.hover_base + correction)
+
+    def hover(self, duration_seconds, target_altitude=None):
+        """Synchronously hovers for duration_seconds with active altitude hold."""
+        if target_altitude is None:
+            from vtol_control.config_reader import get_takeoff_config
+            target_altitude = get_takeoff_config().get('altitude', 1.5)
+
+        self.get_logger().info(f"Entering Hover phase for {duration_seconds} seconds (target altitude: {target_altitude:.2f}m)...")
 
         start_time = time.time()
         while rclpy.ok():
@@ -318,10 +344,23 @@ class VtolBaseNode(Node):
                 return False
                 
             if elapsed >= duration_seconds:
-                self.get_logger().info(f"Hover complete ({duration_seconds}s).")
+                self.get_logger().info(f"Hover complete ({duration_seconds}s). Alt akhir: {self.get_current_altitude():.3f}m")
                 return True
                 
-            self.get_logger().info(f"Hovering... throttle: 1500, elapsed: {elapsed:.1f}s", throttle_duration_sec=1.0)
+            rc3 = self.compute_altitude_hold_rc3(target_altitude)
+            self.rc_channels[0] = 1500
+            self.rc_channels[1] = 1500
+            self.rc_channels[2] = rc3
+            self.rc_channels[3] = 1500
+            if not self.rc_timer:
+                self.publish_rc()
+
+            current_alt = self.get_current_altitude()
+            self.get_logger().info(
+                f"[HOVER] alt: {current_alt:.2f}m/{target_altitude:.2f}m | "
+                f"err: {target_altitude - current_alt:+.3f}m | RC3: {rc3} | elapsed: {elapsed:.1f}s",
+                throttle_duration_sec=1.0
+            )
             rclpy.spin_once(self, timeout_sec=0.1)
             
         return False
