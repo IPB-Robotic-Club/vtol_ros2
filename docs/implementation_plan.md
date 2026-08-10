@@ -1,37 +1,33 @@
-# Implementation Plan: Operator Confirmation After Arming in `VtolBaseNode`
+# Implementation Plan - Parameter Adjustments for Mission Hover & Takeoff
 
-Refactoring `VtolBaseNode` in `vtol_base.py` to add an interactive operator confirmation prompt after arming, requiring the operator to press `[ENTER]` before proceeding to the next flight stage (such as climb/takeoff).
-
-## User Review Required
-
-> [!IMPORTANT]
-> **Safety & Spin behavior during waiting for input**:
-> While waiting for the operator to press `[ENTER]`, `rclpy.spin_once()` will continue running in a non-blocking loop (using `select.select` on `sys.stdin`). This ensures ROS2 node callbacks, MAVROS heartbeats, and RC override timers remain active while waiting. If autopilot disconnects or disarms while waiting, the process will automatically abort.
+This document outlines the proposed adjustments to the VTOL control configuration and mission scripts for mission hover duration (10s), takeoff slowdown zone (0.2m), and target takeoff altitude (1.2m).
 
 ## Proposed Changes
 
-### `vtol_control`
+### Configuration & Control (`vtol_control`)
+
+#### [MODIFY] [vtol_config.yaml](../workspace/src/vtol_control/config/vtol_config.yaml)
+- Change `takeoff.altitude` from `1` to `1.2`.
+- Add `takeoff.slowdown_zone: 0.2`.
+
+#### [MODIFY] [config_reader.py](../workspace/src/vtol_control/vtol_control/config_reader.py)
+- Update `get_takeoff_config()` to load `slowdown_zone` parameter from `vtol_config.yaml` (default: 0.2).
 
 #### [MODIFY] [vtol_base.py](../workspace/src/vtol_control/vtol_control/vtol_base.py)
+- Update `takeoff()` method to use `SLOWDOWN_ZONE` from `config.get('slowdown_zone', 0.2)` instead of hardcoded `0.1`.
 
-- **Add `wait_for_operator_confirmation(self, prompt)`**:
-  - Displays standard logger info and formatted terminal prompt.
-  - Non-blocking stdin check via `select.select([sys.stdin], [], [], 0.0)`.
-  - Runs `rclpy.spin_once(self, timeout_sec=0.05)` per iteration to keep ROS2 background callbacks alive.
-  - Performs connection and arming safety checks during wait.
-  - Returns `True` when operator presses `[ENTER]` (or when non-interactive EOF is detected).
+#### [MODIFY] [mission_hover.py](../workspace/src/vtol_control/vtol_control/mission_hover.py)
+- Change hover duration from `5.0` seconds to `10.0` seconds in `run_mission()`.
 
-- **Add `arm(self, timeout=5.0, confirm=True)`**:
-  - Encapsulates arming request and waiting for `self.current_state.armed == True`.
-  - Calls `wait_for_operator_confirmation` after arming if `confirm=True`.
+#### [MODIFY] [menu_launcher.py](../workspace/src/vtol_control/vtol_control/menu_launcher.py)
+- Update menu text from "Misi Hover 5 Detik" to "Misi Hover 10 Detik".
 
-- **Update `takeoff(self, ...)`**:
-  - Replaces manual arming block with `self.arm(confirm=confirm)`.
+---
 
 ## Verification Plan
 
 ### Automated Build Verification
-- Run `colcon build --packages-select vtol_control` inside workspace to confirm compilation succeeds.
+- Run `colcon build --packages-select vtol_control` to verify python package syntax and installation integrity.
 
-### Manual Verification
-- Test python import and syntax integrity.
+### Execution Verification
+- Test `mission_hover` or inspect parameter loading via ROS2 python node execution.

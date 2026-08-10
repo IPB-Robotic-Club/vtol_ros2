@@ -17,6 +17,7 @@ Sistem ini didukung oleh:
 6. [Deskripsi Skrip Kontrol (`vtol_control`)](#6-deskripsi-skrip-kontrol-vtol_control)
 7. [Deployment ke SBC (Raspberry Pi)](#7-deployment-ke-sbc-raspberry-pi)
 8. [Panduan Kalibrasi Kamera & Vision (`vtol_vision`)](docs/kalibrasi_kamera.md)
+9. [Panduan Analisis Log & Transfer Data](docs/panduan_analisis_log.md)
 
 
 ---

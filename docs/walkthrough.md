@@ -1,28 +1,48 @@
-# Walkthrough: Operator Confirmation After Arming
+# Walkthrough - Perbaikan Mission Centering & Uji Darat Vision
 
-Added interactive operator confirmation after arming in `VtolBaseNode` (`vtol_base.py`), requiring the operator to press `[ENTER]` in the terminal before the drone proceeds to the climb stage or subsequent flight instructions.
+Telah diselesaikan analisis log penerbangan Raspberry Pi, perbaikan masalah Yaw Flipping, optimasi deteksi ArUco Vision, serta penyusunan panduan pengujian darat dan transfer log.
 
-## Changes Made
+---
 
-### `vtol_control`
+## Ringkasan Perubahan Kode & Konfigurasi
 
-#### [vtol_base.py](../workspace/src/vtol_control/vtol_control/vtol_base.py)
+### 1. Penanganan Masalah Yaw (Yaw Alignment Disabled)
+- **[vtol_config.yaml](../workspace/src/vtol_control/config/vtol_config.yaml)**:
+  - Menambahkan `enable_yaw_alignment: false` pada blok `pid_centering`.
+  - Menyesuaikan `marker_lost_timeout: 5.0` (dinaikkan dari 3.0s ke 5.0s).
+- **[config_reader.py](../workspace/src/vtol_control/vtol_control/config_reader.py)**:
+  - Menambahkan `enable_yaw_alignment` ke dictionary `default_pid`.
+- **[mission_centering.py](../workspace/src/vtol_control/vtol_control/mission_centering.py)**:
+  - Node langsung memulai fase `CENTERING` (fokus PID Roll & Pitch) tanpa terjebak *loop* `YAW_ALIGN`.
+  - Proteksi `YAW_DRIFT` dan kalkulasi PID Yaw di-bypass sehingga channel RC4 (Yaw) tetap netral 1500.
 
-- Added `wait_for_operator_confirmation(self, prompt)`:
-  - Uses `select.select([sys.stdin], [], [], 0.0)` for non-blocking stdin input check.
-  - Keeps ROS 2 node spinning (`rclpy.spin_once(self, timeout_sec=0.05)`) so MAVROS heartbeat, telemetry callbacks, and background RC timers remain active while waiting.
-  - Includes connection and unexpected disarm safety checks.
-  - Automatically handles non-interactive stdin (EOF) by proceeding safely.
+### 2. Optimasi Pemrosesan ArUco Vision (Mengatasi 77% Frame Loss)
+- **[aruco_receiver.py](../workspace/src/vtol_vision/vtol_vision/aruco_receiver.py)**:
+  - Mengubah `adaptiveThreshWinSizeMax` dari 45 ke 23 dan `adaptiveThreshWinSizeStep` dari 4 ke 10.
+  - Memangkas *rejected candidates* hingga ~75% dan membebaskan beban CPU Raspberry Pi 5 dari pembuatan 11+ threshold image per frame.
 
-- Added `arm(self, timeout=5.0, confirm=True)`:
-  - Encapsulates sending the arm command and waiting until `current_state.armed` is `True`.
-  - Prompts the operator via `wait_for_operator_confirmation()` when `confirm=True`.
+### 3. Dokumentasi Baru
+- **[docs/panduan_analisis_log.md](panduan_analisis_log.md)**:
+  - Menambahkan panduan lengkap transfer log (SCP/rsync) dari Raspi ke PC.
+  - Menambahkan *cheat sheet* penggunaan `workspace/analyze.py`.
+  - Menambahkan prosedur pengujian darat (*dry run / bench test*) 4 metode tanpa harus terbang.
+- **[README.md](../README.md)**:
+  - Menambahkan tautan panduan analisis log ke daftar isi utama.
 
-- Updated `takeoff(self, ..., confirm=True)`:
-  - Delegates arming to `self.arm(confirm=confirm)`.
-  - Configured `SLOWDOWN_ZONE = 0.1` meters (reduced from 0.5m) before target altitude during climb phase.
+---
 
-## Verification Results
+## Hasil Pengujian & Verifikasi
 
-### Syntax & Compilation Check
-- Executed `python3 -m py_compile workspace/src/vtol_control/vtol_control/*.py` cleanly without syntax or import errors.
+### 1. Kompilasi Paket Docker (`colcon build`)
+Perintah kompilasi dijalankan di kontainer `vtol_dev`:
+```bash
+docker exec vtol_dev bash -c "cd /home/pilot/workspace && colcon build --packages-select vtol_control vtol_vision"
+```
+**Hasil:** `Summary: 2 packages finished [5.51s]` (Berhasil 100% tanpa error).
+
+### 2. Evaluasi Data Dry Run Terbaru (`analyze.py`)
+Hasil uji gerak kamera/marker darat (*shake test*):
+- **Tingkat Deteksi Marker:** Meloncat naik dari **22.31% menjadi 71.58%** (peningkatan > 3.2x lipat).
+- **Frame Loss:** Turun dari **77.69% menjadi 28.42%**.
+- **Streak Hilang Terlama:** Turun dari 1.352 frame ($\sim 45$s) menjadi **79 frame ($\sim 2.6$s)**.
+- **Status Failsafe:** Durasi hilang 2.6s berada jauh di bawah batas timeout **5.0s**, sehingga dipastikan aman dari pemicu LAND Failsafe prematur.

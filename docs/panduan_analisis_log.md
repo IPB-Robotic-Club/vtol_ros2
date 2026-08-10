@@ -1,6 +1,6 @@
 # Panduan Analisis Log Penerbangan & Transfer Data
 
-Dokumen ini menjelaskan langkah-langkah untuk menyalin file log hasil penerbangan dari komputer pendamping drone (**Raspberry Pi / SBC**) ke komputer lokal (**PC/WSL**), serta cara menggunakan skrip analisis data [workspace/analyze.py](../workspace/analyze.py) secara mandiri atau dengan bantuan AI (Antigravity).
+Dokumen ini menjelaskan langkah-langkah untuk menyalin file log hasil penerbangan dari komputer pendamping drone (**Raspberry Pi / SBC**) ke komputer lokal (**PC/WSL**), cara menggunakan skrip analisis data [workspace/analyze.py](../workspace/analyze.py) secara mandiri atau dengan bantuan AI (Antigravity), serta prosedur pengujian *vision* di darat (*dry run*).
 
 ---
 
@@ -9,6 +9,7 @@ Dokumen ini menjelaskan langkah-langkah untuk menyalin file log hasil penerbanga
 2. [Panduan Transfer Data dari Raspberry Pi ke PC Lokal](#2-panduan-transfer-data-dari-raspberry-pi-ke-pc-lokal)
 3. [Perintah Analisis Data (analyze.py)](#3-perintah-analisis-data-analyzepy)
 4. [Cara Menggunakan AI untuk Analisis Otomatis](#4-cara-menggunakan-ai-untuk-analisis-otomatis)
+5. [Prosedur Uji Darat Vision (Dry Run tanpa Terbang)](#5-prosedur-uji-darat-vision-dry-run-tanpa-terbang)
 
 ---
 
@@ -106,3 +107,50 @@ AI akan secara otomatis:
 1. Menjalankan skrip `workspace/analyze.py`.
 2. Membaca statistik korelasi, timeline kesalahan, dan frame loss.
 3. Menyajikan diagnosis masalah empiris beserta solusi perbaikan pada kode/konfigurasi secara langsung.
+
+---
+
+## 5. Prosedur Uji Darat Vision (Dry Run tanpa Terbang)
+
+Metode pengujian ini digunakan untuk menguji stabilitas inferensi deteksi ArUco dan tingkat *frame loss* di darat (*bench test*) tanpa harus menerbangkan drone (*disarmed* / *no propellers*).
+
+### Metode 1: Handheld Shake & Motion Test (Uji Gerak Tangan)
+1. **Jalankan Streamer Kamera di Host Raspi:**
+   ```bash
+   python3 pi5_streamer.py
+   ```
+2. **Jalankan Node Vision di Kontainer Docker Raspi:**
+   ```bash
+   docker exec -it vtol_sbc bash
+   ros2 run vtol_vision aruco_receiver
+   ```
+3. **Lakukan Pengujian Fisik:**
+   - Pegang marker ArUco atau gerakkan kamera Raspi di atas marker pada jarak 1 – 2 meter.
+   - Goyangkan kamera / marker dengan cepat (simulasi getaran drone saat melayang) dan miringkan sudutnya.
+
+### Metode 2: Pantau Web UI Real-Time
+Buka browser di laptop yang tersambung ke WiFi/Jaringan Raspberry Pi:
+- **Web Stream Video Live:** `http://vtol.local:8086` (atau `http://<ip_raspi>:8086`)
+- **Status JSON Live:** `http://vtol.local:8086/status`
+
+Di tampilan Web Stream, Anda bisa melihat garis kotak hijau pada marker secara real-time. Jika kotak hijau tetap menempel tanpa kedip-kedip saat kamera digoyangkan, deteksi sudah stabil.
+
+### Metode 3: Pantau Log Live via Terminal
+Buka terminal baru di Raspberry Pi dan jalankan perintah `tail` untuk melihat status deteksi per frame secara real-time:
+```bash
+tail -f ~/vtol_ros2/workspace/aruco_vision.log
+```
+Yang perlu diperhatikan:
+- **Kolom DETECTED:** Harus bernilai `1` (terdeteksi).
+- **Kolom REJECTED:** Perhatikan apakah angkanya turun jauh dari 216 ke bawah ~30–50 per frame.
+
+### Metode 4: Analisis Persentase Frame Loss dengan `analyze.py`
+Setelah menggoyangkan kamera selama 1–2 menit, matikan `aruco_receiver` (`Ctrl+C`), lalu jalankan skrip analisis:
+```bash
+python3 workspace/analyze.py --mode vision
+```
+
+**Target Hasil Uji Darat yang Sukses:**
+- **Detected frames:** $> 70\% - 95\%$ (naik drastis dari sebelumnya 22%).
+- **Average rejected markers/frame:** turun signifikan menjadi $< 40 - 50$ kandidat.
+- **Longest continuous loss:** $< 100$ frame (di bawah 3 detik, aman dari timeout failsafe 5 detik).
