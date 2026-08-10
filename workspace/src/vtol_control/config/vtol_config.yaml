@@ -58,6 +58,12 @@ pid_centering:
   deadzone_bias_yaw: 25.0 # Minimum RC kick offset untuk Yaw
   # Sequential axis mode: koreksi Pitch (Y) dulu hingga stabil, lalu Roll (X), lalu kedua axis sekaligus
   sequential_axis_mode: true  # true = PITCH_ONLY → ROLL_ONLY → CENTERING | false = langsung CENTERING (keduanya)
+  # Error axis flip — untuk koreksi arah sumbu kamera vs body drone di hardware nyata.
+  # SITL: false/false (konvensi pixel OpenCV sesuai dengan gerak drone simulasi)
+  # Real drone: flip_error_y: true jika pitch bergerak berlawanan arah dari yang diharapkan
+  #             flip_error_x: true jika roll bergerak berlawanan arah dari yang diharapkan
+  flip_error_x: false   # true = balik arah koreksi Roll (sumbu X)
+  flip_error_y: false   # true = balik arah koreksi Pitch (sumbu Y)
   # Active altitude hold selama centering (P-controller pada RC3/throttle)
   # Menggantikan RC3=1500 hardcoded agar drone tidak drift turun karena LOITER bias di SITL
   hold_altitude: true           # true = aktifkan altitude hold aktif, false = pasif (RC3=1500)

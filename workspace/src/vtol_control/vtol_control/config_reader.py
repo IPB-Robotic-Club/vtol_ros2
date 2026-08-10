@@ -106,6 +106,8 @@ def get_pid_config():
         'deadzone_bias': 25.0,
         'deadzone_bias_yaw': 25.0,
         'sequential_axis_mode': False,
+        'flip_error_x': False,
+        'flip_error_y': False,
         # Active altitude hold parameters
         'hold_altitude': True,
         'kp_altitude': 30.0,

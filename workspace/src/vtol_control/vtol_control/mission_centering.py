@@ -149,6 +149,14 @@ class MissionCenteringNode(VtolBaseNode):
             f"kp={self.kp_altitude} | max_correction=±{self.max_alt_correction}"
         )
 
+        # Flip sumbu error kamera — untuk kompensasi perbedaan orientasi kamera vs body drone.
+        # SITL: false/false. Real drone: sesuaikan berdasarkan hasil observasi arah gerak.
+        self.flip_error_x = bool(self.pid_params.get('flip_error_x', False))
+        self.flip_error_y = bool(self.pid_params.get('flip_error_y', False))
+        self.get_logger().info(
+            f"[ErrorFlip] flip_error_x={self.flip_error_x} | flip_error_y={self.flip_error_y}"
+        )
+
         # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.4 untuk keseimbangan smoothing & delay)
         # max_out dikurangi deadzone_bias agar output final tidak melebihi max_override
         deadzone_bias = float(self.pid_params.get('deadzone_bias', 35.0))
@@ -337,6 +345,14 @@ class MissionCenteringNode(VtolBaseNode):
                 # Normalisasi error menggunakan dimensi aktual dari frame (menyerupai commit 51fe8a59)
                 self.norm_error_x = (center_x - (frame_w / 2.0)) / (frame_w / 2.0)
                 self.norm_error_y = (center_y - (frame_h / 2.0)) / (frame_h / 2.0)
+
+                # Flip sumbu error jika kamera terpasang dengan orientasi berbeda dari body drone.
+                # Contoh: kamera menghadap ke bawah di drone real bisa membalik mapping sumbu Y.
+                # Set flip_error_x/y: true di vtol_config.yaml untuk mengaktifkan.
+                if self.flip_error_x:
+                    self.norm_error_x = -self.norm_error_x
+                if self.flip_error_y:
+                    self.norm_error_y = -self.norm_error_y
 
                 # ── Yaw dari pose_rvec ──
                 if 'pose_rvec' in marker:
