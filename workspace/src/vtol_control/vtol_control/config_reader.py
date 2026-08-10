@@ -105,6 +105,7 @@ def get_pid_config():
         'marker_lost_timeout': 1.0,
         'deadzone_bias': 25.0,
         'deadzone_bias_yaw': 25.0,
+        'control_interval': 2.0,
         'sequential_axis_mode': False,
         'flip_error_x': False,
         'flip_error_y': False,
