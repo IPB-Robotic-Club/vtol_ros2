@@ -37,7 +37,7 @@ mavlink_forward:
 
 # Parameter PID untuk Centering ArUco (Menyerupai commit 51fe8a59)
 pid_centering:
-  kp_roll: 15.0         # Proportional gain untuk Roll (mengoreksi deviasi X)
+  kp_roll: 10.0         # Proportional gain untuk Roll (mengoreksi deviasi X)
   ki_roll: 0.1          # Integral gain untuk Roll
   kd_roll: 2.0          # Derivative gain untuk Roll (untuk redam overshoot & jitter)
   kp_pitch: 15.0        # Proportional gain untuk Pitch (mengoreksi deviasi Y)
@@ -51,13 +51,14 @@ pid_centering:
   max_yaw_override: 30  # Deviasi maksimal RC4 (Yaw) dari 1500
   max_throttle_override: 0 # Deviasi maksimal RC3 (Throttle) dari 1500
   yaw_error_threshold: 0.085 # Batas toleransi error Yaw dalam radian
-  error_threshold: 0.08 # Batas toleransi error (8% dari setengah ukuran layar)
+  error_threshold: 0.10 # Batas toleransi error (10% dari setengah ukuran layar, toleransi ideal 10 cm)
   centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan
-  marker_lost_timeout: 5.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
-  deadzone_bias: 20.0   # Minimum RC kick offset untuk Roll/Pitch (menembus deadzone ArduPilot ~20 PWM)
+  marker_lost_timeout: 8.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
+  deadzone_bias: 22.0   # Minimum RC kick offset untuk Roll/Pitch (menembus deadzone ArduPilot ~20 PWM + 2 PWM margin)
   deadzone_bias_yaw: 25.0 # Minimum RC kick offset untuk Yaw
-  # Jeda (detik) antara pemberian perintah RC berturut-turut agar fisik drone sempat merespon
-  control_interval: 2.0 # Jeda 2 detik per iterasi koreksi RC/PID
+  # Jeda (detik) antara pemberian perintah RC berturut-turut
+  control_interval: 1.0      # Jeda 1.0s per iterasi di fase sequential (PITCH_ONLY & ROLL_ONLY)
+  control_interval_fine: 0.8 # Jeda 0.8s per iterasi di fase CENTERING (fine-tuning cepat & responsif)
   # Sequential axis mode: koreksi Pitch (Y) dulu hingga stabil, lalu Roll (X), lalu kedua axis sekaligus
   sequential_axis_mode: true  # true = PITCH_ONLY → ROLL_ONLY → CENTERING | false = langsung CENTERING (keduanya)
   # Error axis flip — untuk koreksi arah sumbu kamera vs body drone di hardware nyata.

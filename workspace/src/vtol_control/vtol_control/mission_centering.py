@@ -98,7 +98,7 @@ class PIDController:
         self.last_dt = 0.0
 
 
-def apply_smooth_deadzone(u_raw, deadzone, band=4.0):
+def apply_smooth_deadzone(u_raw, deadzone, band=2.0):
     """
     Kompensasi deadzone RC dengan transisi linier kontinu di dekat nol.
     Mencegah osilasi bang-bang yang terjadi saat pakai hard cut-off.
@@ -154,9 +154,10 @@ class MissionCenteringNode(VtolBaseNode):
         self.flip_error_x = bool(self.pid_params.get('flip_error_x', False))
         self.flip_error_y = bool(self.pid_params.get('flip_error_y', False))
         self.control_interval = float(self.pid_params.get('control_interval', 2.0))
+        self.control_interval_fine = float(self.pid_params.get('control_interval_fine', 0.8))
         self.get_logger().info(
-            f"[ErrorFlip] flip_error_x={self.flip_error_x} | flip_error_y={self.flip_error_y} | "
-            f"control_interval={self.control_interval}s"
+            f"[ErrorFlip] flip_x={self.flip_error_x} | flip_y={self.flip_error_y} | "
+            f"interval_seq={self.control_interval}s | interval_fine={self.control_interval_fine}s"
         )
 
         # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.4 untuk keseimbangan smoothing & delay)
@@ -549,8 +550,8 @@ class MissionCenteringNode(VtolBaseNode):
                     self.write_log(f"[PITCH_ONLY] Pitch keluar toleransi (ey={self.norm_error_y:.3f}). Reset timer.")
                     self.stable_start_time = None
                 u_pitch_raw = self.pid_pitch.update(self.norm_error_y, current_time)
-                deadzone_bias = self.pid_params.get('deadzone_bias', 20.0)
-                u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=4.0)
+                deadzone_bias = self.pid_params.get('deadzone_bias', 22.0)
+                u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=2.0)
                 u_pitch = max(min(u_pitch, self.max_override), -self.max_override)
                 self.rc_channels[0] = 1500
                 self.rc_channels[1] = int(1500 + u_pitch)
@@ -619,8 +620,8 @@ class MissionCenteringNode(VtolBaseNode):
                     self.write_log(f"[ROLL_ONLY] Roll keluar toleransi (ex={self.norm_error_x:.3f}). Reset timer.")
                     self.stable_start_time = None
                 u_roll_raw = self.pid_roll.update(self.norm_error_x, current_time)
-                deadzone_bias = self.pid_params.get('deadzone_bias', 20.0)
-                u_roll = apply_smooth_deadzone(u_roll_raw, deadzone_bias, band=4.0)
+                deadzone_bias = self.pid_params.get('deadzone_bias', 22.0)
+                u_roll = apply_smooth_deadzone(u_roll_raw, deadzone_bias, band=2.0)
                 u_roll = max(min(u_roll, self.max_override), -self.max_override)
                 self.rc_channels[0] = int(1500 + u_roll)
                 self.rc_channels[1] = 1500
@@ -702,10 +703,10 @@ class MissionCenteringNode(VtolBaseNode):
             u_yaw_raw  = self.pid_yaw.update(self.yaw_error, current_time) if yaw_active else 0.0
 
             # Kompensasi deadzone RC dengan smooth transition
-            deadzone_bias     = self.pid_params.get('deadzone_bias', 20.0)
+            deadzone_bias     = self.pid_params.get('deadzone_bias', 22.0)
             deadzone_bias_yaw = self.pid_params.get('deadzone_bias_yaw', 15.0)
-            u_roll  = apply_smooth_deadzone(u_roll_raw,  deadzone_bias, band=4.0)
-            u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=4.0)
+            u_roll  = apply_smooth_deadzone(u_roll_raw,  deadzone_bias, band=2.0)
+            u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=2.0)
             u_yaw   = apply_smooth_deadzone(u_yaw_raw,   deadzone_bias_yaw, band=2.0) if yaw_active else 0.0
 
             # Clamp ke max_override
@@ -873,7 +874,8 @@ class MissionCenteringNode(VtolBaseNode):
 
             # Pengganti rate.sleep() untuk menghindari deadlock di ROS 2 (sim_time)
             # Selalu gunakan rclpy.spin_once() agar callback vision dan /clock tetap terproses
-            target_dt = self.control_interval  # Configurable delay per PID update loop (e.g. 2.0s)
+            # PITCH_ONLY & ROLL_ONLY: 2.0s pacing | CENTERING fine-tune: 0.8s pacing
+            target_dt = self.control_interval_fine if self.phase == 'CENTERING' else self.control_interval
             elapsed_in_loop = self.get_current_time() - current_time
             sleep_time = target_dt - elapsed_in_loop
 
