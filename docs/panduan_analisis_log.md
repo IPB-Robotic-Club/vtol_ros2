@@ -27,25 +27,23 @@ Setiap kali misi centering atau deteksi ArUco dijalankan di Raspberry Pi, sistem
 
 Jalankan perintah ini di **Terminal PC/WSL lokal** Anda (bukan di dalam Docker dan bukan di dalam SSH Raspi):
 
-### Menggunakan SCP (Sangat Direkomendasikan)
-Gunakan perintah `scp` untuk menyalin seluruh file `.csv` dan `.log` dari Raspberry Pi ke workspace PC lokal:
+### Perintah Gabungan Single-Line (1 Command)
+Cukup jalankan **1 perintah** berikut untuk menyalin seluruh file `.csv` (telemetri/PID) dan `.log` (log teks & vision) sekaligus dari Raspberry Pi ke PC lokal:
 
 ```bash
-# Salin file data CSV:
-scp vtol@vtol.local:~/vtol_ros2/workspace/*.csv ~/vtol-dev/workspace/
+# Menggunakan SCP (1 Perintah Gabungan):
+scp vtol@vtol.local:~/vtol_ros2/workspace/*.{csv,log} ~/vtol-dev/workspace/
+```
 
-# Salin file log teks & vision:
-scp vtol@vtol.local:~/vtol_ros2/workspace/*.log ~/vtol-dev/workspace/
+Atau jika menggunakan `rsync`:
+
+```bash
+# Menggunakan Rsync (1 Perintah Gabungan):
+rsync -avz vtol@vtol.local:~/vtol_ros2/workspace/*.{csv,log} ~/vtol-dev/workspace/
 ```
 
 *Catatan:*
 - Jika username atau IP Raspberry Pi berbeda, sesuaikan `vtol@vtol.local` dengan `username@IP_ADDRESS` Anda (contoh: `pi@192.168.1.100`).
-
-### Menggunakan Rsync (Alternatif)
-```bash
-rsync -avz vtol@vtol.local:~/vtol_ros2/workspace/*.csv ~/vtol-dev/workspace/
-rsync -avz vtol@vtol.local:~/vtol_ros2/workspace/*.log ~/vtol-dev/workspace/
-```
 
 ---
 
