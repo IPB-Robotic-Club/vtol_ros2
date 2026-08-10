@@ -101,6 +101,8 @@ def get_pid_config():
         'max_throttle_override': 30,
         'yaw_error_threshold': 0.1,
         'error_threshold': 0.06,
+        'immediate_land_threshold': 0.05,
+        'exit_threshold_multiplier': 1.8,
         'centering_duration': 3.0,
         'marker_lost_timeout': 1.0,
         'deadzone_bias': 25.0,

@@ -153,11 +153,14 @@ class MissionCenteringNode(VtolBaseNode):
         # SITL: false/false. Real drone: sesuaikan berdasarkan hasil observasi arah gerak.
         self.flip_error_x = bool(self.pid_params.get('flip_error_x', False))
         self.flip_error_y = bool(self.pid_params.get('flip_error_y', False))
-        self.control_interval = float(self.pid_params.get('control_interval', 2.0))
+        self.control_interval = float(self.pid_params.get('control_interval', 1.0))
         self.control_interval_fine = float(self.pid_params.get('control_interval_fine', 0.8))
+        self.immediate_land_threshold = float(self.pid_params.get('immediate_land_threshold', 0.05))
+        self.exit_threshold_multiplier = float(self.pid_params.get('exit_threshold_multiplier', 1.8))
         self.get_logger().info(
             f"[ErrorFlip] flip_x={self.flip_error_x} | flip_y={self.flip_error_y} | "
-            f"interval_seq={self.control_interval}s | interval_fine={self.control_interval_fine}s"
+            f"interval_seq={self.control_interval}s | interval_fine={self.control_interval_fine}s | "
+            f"imm_land={self.immediate_land_threshold}m | exit_mult={self.exit_threshold_multiplier}"
         )
 
         # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.4 untuk keseimbangan smoothing & delay)
@@ -656,69 +659,70 @@ class MissionCenteringNode(VtolBaseNode):
             return  # Jangan lanjut ke CENTERING
 
         # ── FASE 4: CENTERING (fine-tune kedua axis) ───────────────────────
-        u_roll_raw  = 0.0
-        u_roll      = 0.0
-        u_pitch_raw = 0.0
-        u_pitch     = 0.0
-
         is_fresh       = (current_time - self.last_detection_time) <= 0.3
         is_xy_centered = (distance_error <= self.error_threshold)
-        # Catatan: is_yaw_aligned TIDAK digunakan sebagai syarat selesai di sini.
-        # Yaw sudah di-align di fase YAW_ALIGN. Di CENTERING, yaw hanya dikoreksi
-        # jika drift melebihi threshold (lihat yaw_active di bawah), tapi tidak
-        # memblokir transisi ke kondisi stabil.
-        is_yaw_ok = (not self.has_yaw_measurement) or (abs(self.yaw_error) <= self.yaw_error_threshold * 1.5)
+        exit_threshold = self.error_threshold * self.exit_threshold_multiplier
 
+        # Solusi B: Tangkapan Super Presisi (<= 5 cm) -> Pendaratan Instan!
+        if is_fresh and distance_error <= self.immediate_land_threshold:
+            self.write_log(
+                f"[IMMEDIATE_LAND] Tangkapan super-presisi (dist={distance_error*100:.1f}cm <= "
+                f"{self.immediate_land_threshold*100:.1f}cm)! Memulai pendaratan instan..."
+            )
+            self.centered = True
+            return
+
+        # Histeresis Timer Stabil:
+        # Masuk timer saat dist <= entry_threshold (10cm).
+        # Timer HANYA RESET jika vision stale ATAU dist > exit_threshold (18cm).
         if is_fresh and is_xy_centered:
-            # XY sudah di dalam toleransi: netralkan Roll/Pitch.
-            # Yaw juga dinetralisir kecuali masih ada drift signifikan.
-            self.rc_channels[0] = 1500
-            self.rc_channels[1] = 1500
-            self.rc_channels[2] = rc3_alt_hold
-            self.rc_channels[3] = 1500
-            self.pid_roll.reset()
-            self.pid_pitch.reset()
-
             if self.stable_start_time is None:
                 self.stable_start_time = current_time
                 self.write_log(
-                    f"Drone presisi di dalam toleransi XY (dist={distance_error:.3f}m "
-                    f"<= {self.error_threshold}m). "
-                    f"Menunggu stabil {self.centering_duration}s..."
+                    f"[CENTERING] Drone presisi di dalam toleransi XY (dist={distance_error:.3f}m "
+                    f"<= {self.error_threshold}m). Menunggu stabil {self.centering_duration}s..."
                 )
+            elif (current_time - self.stable_start_time) >= self.centering_duration:
+                self.write_log(
+                    f"[CENTERING] Drone stabil {self.centering_duration}s di dalam toleransi! "
+                    f"Memulai pendaratan..."
+                )
+                self.centered = True
+                return
         else:
             if self.stable_start_time is not None:
-                reasons = []
-                if not is_fresh: reasons.append("vision stale >0.3s")
-                if not is_xy_centered: reasons.append(f"dist={distance_error:.3f}m > {self.error_threshold}m")
-                self.write_log(f"Drone keluar dari toleransi ({', '.join(reasons)}). Reset timer stabil...")
-                self.stable_start_time = None
+                if not is_fresh or distance_error > exit_threshold:
+                    reasons = []
+                    if not is_fresh: reasons.append("vision stale >0.3s")
+                    if distance_error > exit_threshold: reasons.append(f"dist={distance_error:.3f}m > exit_thresh={exit_threshold:.3f}m")
+                    self.write_log(f"[CENTERING] Drone keluar toleransi histeresis ({', '.join(reasons)}). Reset timer stabil...")
+                    self.stable_start_time = None
 
-            # Update PID dari loop dengan dt yang konsisten
-            u_roll_raw  = self.pid_roll.update(self.norm_error_x, current_time)
-            u_pitch_raw = self.pid_pitch.update(self.norm_error_y, current_time)
+        # Active Brake & Hold: PID SELALU aktif menghitung koreksi (TIDAK ADA RC=1500 DROP / PID RESET)
+        u_roll_raw  = self.pid_roll.update(self.norm_error_x, current_time)
+        u_pitch_raw = self.pid_pitch.update(self.norm_error_y, current_time)
 
-            # Yaw PID dihitung hanya jika enable_yaw_alignment aktif, measurement ada DAN error melebihi threshold
-            yaw_active = self.enable_yaw_alignment and self.has_yaw_measurement and (abs(self.yaw_error) > self.yaw_error_threshold)
-            u_yaw_raw  = self.pid_yaw.update(self.yaw_error, current_time) if yaw_active else 0.0
+        # Yaw PID dihitung hanya jika enable_yaw_alignment aktif, measurement ada DAN error melebihi threshold
+        yaw_active = self.enable_yaw_alignment and self.has_yaw_measurement and (abs(self.yaw_error) > self.yaw_error_threshold)
+        u_yaw_raw  = self.pid_yaw.update(self.yaw_error, current_time) if yaw_active else 0.0
 
-            # Kompensasi deadzone RC dengan smooth transition
-            deadzone_bias     = self.pid_params.get('deadzone_bias', 22.0)
-            deadzone_bias_yaw = self.pid_params.get('deadzone_bias_yaw', 15.0)
-            u_roll  = apply_smooth_deadzone(u_roll_raw,  deadzone_bias, band=2.0)
-            u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=2.0)
-            u_yaw   = apply_smooth_deadzone(u_yaw_raw,   deadzone_bias_yaw, band=2.0) if yaw_active else 0.0
+        # Kompensasi deadzone RC dengan smooth transition
+        deadzone_bias     = self.pid_params.get('deadzone_bias', 22.0)
+        deadzone_bias_yaw = self.pid_params.get('deadzone_bias_yaw', 15.0)
+        u_roll  = apply_smooth_deadzone(u_roll_raw,  deadzone_bias, band=2.0)
+        u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=2.0)
+        u_yaw   = apply_smooth_deadzone(u_yaw_raw,   deadzone_bias_yaw, band=2.0) if yaw_active else 0.0
 
-            # Clamp ke max_override
-            max_yaw = self.pid_params.get('max_yaw_override', 60)
-            u_roll  = max(min(u_roll,  self.max_override), -self.max_override)
-            u_pitch = max(min(u_pitch, self.max_override), -self.max_override)
-            u_yaw   = max(min(u_yaw,   max_yaw), -max_yaw) if yaw_active else 0.0
+        # Clamp ke max_override
+        max_yaw = self.pid_params.get('max_yaw_override', 60)
+        u_roll  = max(min(u_roll,  self.max_override), -self.max_override)
+        u_pitch = max(min(u_pitch, self.max_override), -self.max_override)
+        u_yaw   = max(min(u_yaw,   max_yaw), -max_yaw) if yaw_active else 0.0
 
-            self.rc_channels[0] = int(1500 + u_roll)
-            self.rc_channels[1] = int(1500 + u_pitch)
-            self.rc_channels[2] = rc3_alt_hold  # Active altitude hold
-            self.rc_channels[3] = int(1500 + u_yaw)  # Active Yaw hold jika miring > threshold
+        self.rc_channels[0] = int(1500 + u_roll)
+        self.rc_channels[1] = int(1500 + u_pitch)
+        self.rc_channels[2] = rc3_alt_hold  # Active altitude hold
+        self.rc_channels[3] = int(1500 + u_yaw)  # Active Yaw hold jika miring > threshold
 
         # Log diagnostik ke file teks per iterasi
         log_str = (
