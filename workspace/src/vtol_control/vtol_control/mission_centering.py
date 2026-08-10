@@ -169,9 +169,11 @@ class MissionCenteringNode(VtolBaseNode):
             self.pid_params.get('kd_yaw', 8.0), max_yaw_raw, d_filter_alpha=0.4
         )
         self.yaw_error_threshold = self.pid_params.get('yaw_error_threshold', 0.08)
+        self.enable_yaw_alignment = self.pid_params.get('enable_yaw_alignment', False)
 
         self.write_log(
-            f"LOADED PARAMETERS: kp_roll={self.pid_roll.kp}, ki_roll={self.pid_roll.ki}, "
+            f"LOADED PARAMETERS: enable_yaw_alignment={self.enable_yaw_alignment}, "
+            f"kp_roll={self.pid_roll.kp}, ki_roll={self.pid_roll.ki}, "
             f"kd_roll={self.pid_roll.kd}, max_override={self.max_override}, "
             f"d_filter_alpha={self.pid_roll.d_filter_alpha} | "
             f"kp_yaw={self.pid_yaw.kp}, yaw_threshold={self.yaw_error_threshold:.3f}rad"
@@ -216,11 +218,10 @@ class MissionCenteringNode(VtolBaseNode):
         self.stable_start_time = None
         self.centered = False
         self.centering_active = False
-        # Phase control: 'YAW_ALIGN' dulu sebelum 'CENTERING'
-        # Drone harus align heading dengan marker sebelum Roll/Pitch PID aktif,
-        # agar axis kontrol RC1/RC2 sesuai dengan arah pergerakan yang diinginkan.
-        self.phase = 'YAW_ALIGN'
-        self.yaw_aligned = False
+        # Phase control: 'YAW_ALIGN' dulu jika enable_yaw_alignment=True,
+        # sebaliknya langsung ke 'CENTERING' (Roll/Pitch saja)
+        self.phase = 'YAW_ALIGN' if self.enable_yaw_alignment else 'CENTERING'
+        self.yaw_aligned = not self.enable_yaw_alignment
 
         # Berlangganan topik deteksi dari vtol_vision
         self.detection_sub = self.create_subscription(
@@ -462,11 +463,11 @@ class MissionCenteringNode(VtolBaseNode):
             return  # Jangan lanjut ke centering dulu
 
         # ── FASE 2: CENTERING ──────────────────────────────────────────────
-        # Check Heading Drift Re-entry Hysteresis.
+        # Check Heading Drift Re-entry Hysteresis (hanya jika enable_yaw_alignment aktif).
         # Threshold dikalikan 4.0 (bukan 2.0) agar tidak terlalu sensitif terhadap
         # noise yaw measurement yang menyebabkan bolak-balik YAW ↔ CENTERING.
         yaw_reenter_thresh = self.yaw_error_threshold * 4.0
-        if self.has_yaw_measurement and abs(self.yaw_error) > yaw_reenter_thresh:
+        if self.enable_yaw_alignment and self.has_yaw_measurement and abs(self.yaw_error) > yaw_reenter_thresh:
             self.write_warn(
                 f"[YAW_DRIFT] Heading miring signifikan! yaw_err={self.yaw_error:.3f}rad > "
                 f"reenter_threshold={yaw_reenter_thresh:.3f}rad. Kembali ke YAW_ALIGN."
@@ -525,8 +526,8 @@ class MissionCenteringNode(VtolBaseNode):
             u_roll_raw  = self.pid_roll.update(self.norm_error_x, current_time)
             u_pitch_raw = self.pid_pitch.update(self.norm_error_y, current_time)
 
-            # Yaw PID dihitung hanya jika measurement ada DAN error melebihi threshold
-            yaw_active = self.has_yaw_measurement and (abs(self.yaw_error) > self.yaw_error_threshold)
+            # Yaw PID dihitung hanya jika enable_yaw_alignment aktif, measurement ada DAN error melebihi threshold
+            yaw_active = self.enable_yaw_alignment and self.has_yaw_measurement and (abs(self.yaw_error) > self.yaw_error_threshold)
             u_yaw_raw  = self.pid_yaw.update(self.yaw_error, current_time) if yaw_active else 0.0
 
             # Kompensasi deadzone RC dengan smooth transition

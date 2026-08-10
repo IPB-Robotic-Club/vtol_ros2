@@ -92,6 +92,7 @@ def get_pid_config():
         'kp_pitch': 120.0,
         'ki_pitch': 5.0,
         'kd_pitch': 15.0,
+        'enable_yaw_alignment': False,
         'kp_yaw': 3.0,
         'ki_yaw': 0.1,
         'kd_yaw': 4.0,

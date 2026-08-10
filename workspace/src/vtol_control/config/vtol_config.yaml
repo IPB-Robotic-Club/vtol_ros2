@@ -43,6 +43,7 @@ pid_centering:
   kp_pitch: 5.0         # Proportional gain untuk Pitch (mengoreksi deviasi Y)
   ki_pitch: 0.2         # Integral gain untuk Pitch
   kd_pitch: 8.0         # Derivative gain untuk Pitch (untuk redam overshoot)
+  enable_yaw_alignment: false # Set true untuk aktifkan koreksi Yaw, false = fokus Roll/Pitch saja
   kp_yaw: 5.0           # Proportional gain untuk Yaw
   ki_yaw: 0.2           # Integral gain untuk Yaw
   kd_yaw: 8.0           # Derivative gain untuk Yaw
