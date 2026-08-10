@@ -1,33 +1,52 @@
-# Penyelesaian "Drop Mendadak" pada Centering PID
+# Walkthrough: Camera Axis Inversion Fix & PID Tuning for Real Drone Centering
 
-## Masalah yang Ditemukan
-Dalam pengujian terakhir, *drone* menderita **penurunan ketinggian (*altitude drop*)** yang parah (dari 1.70m jatuh ke 0.60m) selama fase pembidik *marker* (centering). 
+## Summary of Changes
 
-Setelah memeriksa *log* mendalam, ditemukan bahwa:
-- *Drone* VTOL dalam lingkungan simulasi akan **kehilangan gaya angkat (lift)** secara drastis apabila dimiringkan (Pitch/Roll) terlalu tajam.
-- Setelan sebelumnya (`max_override=40` dan `kp=7.5`) mengizinkan PID untuk memberikan perintah kemiringan yang sangat besar (mencapai RC=1540).
-- Hal ini menyebabkan hidung *drone* menukik tajam, ketinggian merosot drastis layaknya batu, dan sudut pandang kamera ikut tersapu dengan cepat sehingga seketika kehilangan penjejakan *marker*.
+We identified that on the physical Raspberry Pi 5 drone hardware, the camera stream was inverted by 180° relative to the drone's body axes, causing the drone to move away from the marker when trying to correct roll/pitch. Additionally, PID parameters in `vtol_config.yaml` were overly constrained by `max_override` and high derivative gain.
 
-## Perubahan yang Dilakukan
-Untuk menjaga *drone* dari kemiringan ekstrem tanpa mengorbankan daya dorong (*thrust*):
+### 1. Vision Configuration & Inversion Support (`vtol_vision`)
+- **[vision_config.yaml](file:///home/qois/vtol-dev/workspace/src/vtol_vision/config/vision_config.yaml)**: Added `flip_camera: true` under the `raspi` hardware profile.
+- **[aruco_receiver.py](file:///home/qois/vtol-dev/workspace/src/vtol_vision/vtol_vision/aruco_receiver.py)**:
+  - Loaded `flip_camera` configuration option in `__init__`.
+  - Applied 180° rotation `cv2.flip(frame, -1)` at the start of `_process_frame` when `flip_camera` is active.
 
-1. **Memotong Batas Kemiringan**:
-   - [vtol_config.yaml](file:///home/qois/vtol-dev/workspace/src/vtol_control/config/vtol_config.yaml)
-   - `max_override` diturunkan kembali dari `40` menjadi `30`. 
-   - Ini memastikan batasan kemiringan *drone* ada pada rentang aman yang **tidak akan membahayakan gaya angkat vertikal**.
+### 2. PID & Control Optimization (`vtol_control`)
+- **[vtol_config.yaml](file:///home/qois/vtol-dev/workspace/src/vtol_control/config/vtol_config.yaml)**:
+  - `max_override`: Increased from `30` to `50` PWM units (providing sufficient tilt angle for real-world drone flight).
+  - `deadzone_bias`: Adjusted to `20.0` (providing a smooth linear control range `pid_max_raw = 50 - 20 = 30.0`).
+  - `kp_roll` / `kp_pitch`: Increased to `6.0`.
+  - `ki_roll` / `ki_pitch`: Set to `0.1`.
+  - `kd_roll` / `kd_pitch`: Reduced from `8.0` to `2.5` to eliminate derivative noise spikes.
 
-2. **Memperkecil Zona Kedap (Deadzone Band)**:
-   - [mission_centering.py](file:///home/qois/vtol-dev/workspace/src/vtol_control/vtol_control/mission_centering.py)
-   - Parameter `band` diubah dari `2.0` menjadi `0.5`. 
-   - Meskipun kemiringan *drone* kita batasi, mengecilkan `band` memastikan setiap perhitungan pergerakan yang dikeluarkan PID akan langsung disalurkan ke motor secara responsif, membuat pergerakan *drone* tidak terasa lamban atau "lemah".
+---
 
-3. **Menambahkan Komponen Integral**:
-   - `ki_roll` dan `ki_pitch` diaktifkan ke `0.2` (dari sebelumnya `0.0`).
-   - `kp` dikembalikan ke `5.0`.
-   - Ini meminimalisasi kemiringan mendadak, sekaligus memastikan bahwa kalaupun *drone* kurang kencang melaju ke titik pusat, komponen Integral secara lambat-laun akan mendorong *drone* hingga tepat berada di atas sasaran.
+## Verification Results
 
-## Pengujian
-- **Status Kompilasi**: Selesai dikompilasi dengan sukses melalui `colcon build`.
-- **Harapan Pengujian Selanjutnya**: Silakan uji ulang sistem. Kini *drone* akan "mengerem" kemiringannya dan lebih stabil melaju ke *marker* tanpa merosot jatuh ke bawah. 
+### Build Integrity Test
+Ran `colcon build` inside the `vtol_dev` Docker container:
+```bash
+docker exec vtol_dev bash -c "cd /home/pilot/workspace && colcon build --packages-select vtol_vision vtol_control"
+```
+**Output**:
+```text
+Starting >>> vtol_control
+Finished <<< vtol_control [0.79s]
+Starting >>> vtol_vision
+Finished <<< vtol_vision [0.69s]
 
-*(Perbaikan dan optimasi logika telah dimasukkan, dan drone Anda siap diterbangkan!)*
+Summary: 2 packages finished [1.61s]
+```
+✅ Both packages compiled cleanly with 0 errors.
+
+---
+
+## Pre-Flight Checklist for Real Drone Test
+
+1. **Verify Web Stream Dashboard**:
+   - Run `pi5_streamer.py` on host and `ros2 run vtol_vision aruco_receiver` in container.
+   - Access `http://<raspi-ip>:8086`.
+   - Move marker forward $\rightarrow$ Verify marker center moves UP on screen.
+   - Move marker right $\rightarrow$ Verify marker center moves RIGHT on screen.
+
+2. **Post-Flight Diagnostics**:
+   - Run `python3 workspace/analyze.py --mode all` after flight to verify convergence.

@@ -297,6 +297,10 @@ class ArucoReceiverNode(Node):
         cam_mat_list = self.cam_config['camera_matrix']
         self.camera_matrix = np.array(cam_mat_list, dtype=np.float32).reshape(3, 3)
         self.dist_coeffs   = np.array(self.cam_config['dist_coeffs'], dtype=np.float32)
+        self.flip_camera   = self.cam_config.get('flip_camera', False)
+        if self.flip_camera:
+            self.get_logger().info("Rotasi kamera 180° (flip_camera=true) diaktifkan.")
+
 
         # Check if local calibration exists in workspace (hanya untuk profil raspi)
         calib_path = "/home/pilot/workspace/camera_calibration.yaml"
@@ -437,6 +441,10 @@ class ArucoReceiverNode(Node):
     def _process_frame(self, frame, count, raw_bytes):
         """Jalankan deteksi ArUco, annotasi frame, publish ROS + update MJPEG buffer."""
         global _latest_jpeg, _detection_state
+
+        # Rotasi 180° jika kamera fisik terpasang terbalik
+        if self.flip_camera:
+            frame = cv2.flip(frame, -1)
 
         # Lakukan undistort untuk menghilangkan distorsi lensa (Opsi 1) - Aktifkan jika kalibrasi presisi
         # frame = cv2.undistort(frame, self.camera_matrix, self.dist_coeffs)

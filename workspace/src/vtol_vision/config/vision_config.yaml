@@ -24,6 +24,8 @@ profiles:
     # Hasil kalibrasi fisik lensa Raspi 5
     camera_matrix: [775.8415, 0.0, 340.6690, 0.0, 776.5958, 214.2745, 0.0, 0.0, 1.0]
     dist_coeffs: [-0.39287, -0.49250, 0.00246, -0.00340, 3.80986]
+    flip_camera: true             # Set true jika kamera fisik Raspi terpasang terbalik 180°
+
 
 # ── Konfigurasi ArUco (berlaku untuk semua profil) ─────────────────────────
 aruco:
