@@ -318,15 +318,16 @@ class ArucoReceiverNode(Node):
         self.aruco_dict   = cv2.aruco.Dictionary_get(dict_id)
         self.aruco_params = cv2.aruco.DetectorParameters_create()
         
-        # Optimasi parameter deteksi agar sangat stabil dan tahan pantulan cahaya/kerutan:
+        # Optimasi parameter deteksi agar sangat stabil dan cepat di Raspi 5:
+        # WinSizeMax & WinSizeStep dioptimalkan agar tidak membuat 11+ threshold image per frame (penyebab 216 rejected candidates/frame)
         self.aruco_params.cornerRefinementMethod = cv2.aruco.CORNER_REFINE_SUBPIX
         self.aruco_params.adaptiveThreshWinSizeMin = 3
-        self.aruco_params.adaptiveThreshWinSizeMax = 45
-        self.aruco_params.adaptiveThreshWinSizeStep = 4
+        self.aruco_params.adaptiveThreshWinSizeMax = 23
+        self.aruco_params.adaptiveThreshWinSizeStep = 10
         self.aruco_params.adaptiveThreshConstant = 7
         
-        # Toleransi ekstra terhadap kerutan spanduk (garis tepi tidak lurus sempurna akibat berkerut)
-        self.aruco_params.polygonalApproxAccuracyRate = 0.05
+        # Toleransi kontur polygon
+        self.aruco_params.polygonalApproxAccuracyRate = 0.03
         
         # Toleransi ekstra terhadap pantulan cahaya (memperbolehkan koreksi bit biner yang bocor/rusak karena kilauan)
         self.aruco_params.errorCorrectionRate = 0.8

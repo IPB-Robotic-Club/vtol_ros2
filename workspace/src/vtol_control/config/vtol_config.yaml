@@ -53,7 +53,7 @@ pid_centering:
   yaw_error_threshold: 0.085 # Batas toleransi error Yaw dalam radian
   error_threshold: 0.08 # Batas toleransi error (8% dari setengah ukuran layar)
   centering_duration: 3.0 # Waktu stabil (detik) di bawah threshold sebelum meluncurkan pendaratan
-  marker_lost_timeout: 3.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
+  marker_lost_timeout: 5.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
   deadzone_bias: 25.0   # Minimum RC kick offset untuk Roll/Pitch
   deadzone_bias_yaw: 25.0 # Minimum RC kick offset untuk Yaw
   # Active altitude hold selama centering (P-controller pada RC3/throttle)
