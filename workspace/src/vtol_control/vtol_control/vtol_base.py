@@ -174,6 +174,71 @@ class VtolBaseNode(Node):
             self.get_logger().error(f"Arming service not available for value: {arm_value}")
             return False
 
+    def wait_for_operator_confirmation(self, prompt="Tekan [ENTER] untuk melanjutkan ke instruksi selanjutnya...") -> bool:
+        """
+        Meminta konfirmasi dari operator via tombol Enter di terminal (stdin).
+        Tetap menjalankan rclpy.spin_once() agar callback MAVROS, telemetry, dan watchdog tetap aktif.
+        """
+        import select
+        import sys
+
+        self.get_logger().info(f"[CONFIRMATION REQUIRED] {prompt}")
+        print(f"\n=======================================================", flush=True)
+        print(f" >>> KONFIRMASI OPERATOR: {prompt} <<<", flush=True)
+        print(f"=======================================================\n", flush=True)
+
+        while rclpy.ok():
+            # Spin ROS2 node agar telemetry dan RC timer tetap aktif
+            rclpy.spin_once(self, timeout_sec=0.05)
+
+            # Watchdog check: koneksi MAVROS
+            if self.state_received and not self.current_state.connected:
+                self.get_logger().error("Autopilot terputus saat menunggu konfirmasi operator! Aborting.")
+                return False
+
+            # Watchdog check: jika ter-disarm secara tidak terduga saat menunggu
+            if not self.current_state.armed:
+                self.get_logger().error("Drone ter-DISARM saat menunggu konfirmasi operator! Aborting.")
+                return False
+
+            # Cek ketersediaan stdin tanpa blocking
+            try:
+                rlist, _, _ = select.select([sys.stdin], [], [], 0.0)
+                if rlist:
+                    line = sys.stdin.readline()
+                    if line == "":  # Non-interactive stdin (EOF)
+                        self.get_logger().warn("Lingkungan non-interaktif terdeteksi (stdin EOF). Otomatis melanjutkan...")
+                        return True
+                    self.get_logger().info("Konfirmasi operator diterima! Melanjutkan ke instruksi selanjutnya.")
+                    return True
+            except Exception as e:
+                self.get_logger().warn(f"Gagal membaca stdin ({e}). Otomatis melanjutkan...")
+                return True
+
+        return False
+
+    def arm(self, timeout=5.0, confirm=True) -> bool:
+        """
+        Mengirim perintah ARM dan menunggu konfirmasi status armed.
+        Jika confirm=True, meminta konfirmasi ulang operator (tombol Enter) sebelum melanjutkan.
+        """
+        self.get_logger().info("Arming drone...")
+        self.set_arm(True)
+        start_time = time.time()
+        while rclpy.ok() and time.time() - start_time < timeout:
+            if self.current_state.armed:
+                break
+            rclpy.spin_once(self, timeout_sec=0.1)
+        else:
+            self.get_logger().error("Failed to ARM drone.")
+            return False
+
+        self.get_logger().info("Drone successfully ARMED!")
+
+        if confirm:
+            return self.wait_for_operator_confirmation("Drone ARMED! Tekan [ENTER] untuk melanjutkan ke instruksi selanjutnya...")
+        return True
+
     def set_rc_channel(self, channel: int, pwm_value: int):
         """
         Set override value for a specific RC channel (1-18).
@@ -198,7 +263,7 @@ class VtolBaseNode(Node):
         msg.channels = self.rc_channels
         self.rc_pub.publish(msg)
 
-    def takeoff(self, target_altitude=None, throttle=None, timeout=20.0):
+    def takeoff(self, target_altitude=None, throttle=None, timeout=20.0, confirm=True):
         """Synchronously commands takeoff to target_altitude using RC overrides."""
         from vtol_control.config_reader import get_takeoff_config
         config = get_takeoff_config()
@@ -231,22 +296,15 @@ class VtolBaseNode(Node):
             self.get_logger().error("Takeoff aborted: Failed to change mode to LOITER.")
             return False
             
-        # 2. Arm the drone
-        self.get_logger().info("Arming drone...")
-        self.set_arm(True)
-        start_time = time.time()
-        while rclpy.ok() and time.time() - start_time < 5.0:
-            if self.current_state.armed:
-                break
-            rclpy.spin_once(self, timeout_sec=0.1)
-        else:
-            self.get_logger().error("Takeoff aborted: Failed to ARM drone.")
+        # 2. Arm the drone & wait for operator confirmation
+        if not self.arm(timeout=5.0, confirm=confirm):
+            self.get_logger().error("Takeoff aborted: Arming or operator confirmation failed.")
             return False
 
         # 3. Climb
         # Slow-down zone: throttle dikurangi proporsional saat mendekati target altitude
         # untuk mencegah LOITER altitude controller overshoot/osilasi fighting dengan RC override.
-        SLOWDOWN_ZONE = 0.5   # meter sebelum target mulai kurangi throttle
+        SLOWDOWN_ZONE = 0.1   # meter sebelum target mulai kurangi throttle
         THROTTLE_MIN  = 1515  # throttle minimal saat di dalam slow-down zone (cukup untuk loft halus)
         throttle_range = throttle - THROTTLE_MIN  # rentang throttle dari min ke full climb
 

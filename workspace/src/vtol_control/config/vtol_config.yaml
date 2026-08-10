@@ -68,6 +68,6 @@ pid_centering:
 
 # Parameter Lepas Landas Otonom (Takeoff)
 takeoff:
-
-  altitude: 1.5    # Ketinggian lepas landas otonom (meter) sebelum centering
-  max_throttle_override: 100 # Deviasi maksimal RC3 (Throttle) dari 1500 (1500 + x atau 1500 - x)
+  altitude: 1              # Ketinggian lepas landas otonom (meter) sebelum centering
+  max_throttle_override: 100 # Deviasi maksimal RC3 (Throttle) dari 1500 (1500 + 100 = 1600 PWM)
+  throttle: 1600             # Nilai PWM Throttle saat Climb (1600 PWM)
