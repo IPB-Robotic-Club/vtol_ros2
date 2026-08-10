@@ -9,7 +9,7 @@ def print_menu():
     print(" 1. Tampilkan HUD Status Drone (vehicle_status)")
     print(" 2. Jalankan Uji Coba Arming (test_arm)")
     print(" 3. Jalankan Uji Coba Takeoff Only (test_takeoff)")
-    print(" 4. Jalankan Misi Hover 5 Detik (mission_hover)")
+    print(" 4. Jalankan Misi Hover 10 Detik (mission_hover)")
     print(" 5. Jalankan Misi Maneuver (mission_maneuver)")
     print(" 6. Jalankan Misi Centering (mission_centering)")
     print(" 7. Debug ArUco Dry-Run / Pre-Flight (debug_aruco)")
@@ -50,7 +50,7 @@ def main():
             except KeyboardInterrupt:
                 pass
         elif choice == '4':
-            print("\nMeluncurkan Misi Hover 5 Detik...\n")
+            print("\nMeluncurkan Misi Hover 10 Detik...\n")
             time.sleep(1.0)
             try:
                 subprocess.run(["ros2", "run", "vtol_control", "mission_hover"])

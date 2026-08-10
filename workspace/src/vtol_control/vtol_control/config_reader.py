@@ -143,7 +143,8 @@ def get_takeoff_config():
     default_takeoff = {
         'takeoff_altitude': 1.5,
         'max_throttle_override': 30,
-        'takeoff_throttle': 1530
+        'takeoff_throttle': 1530,
+        'slowdown_zone': 0.2
     }
 
     if os.path.exists(config_file_path):
@@ -161,6 +162,8 @@ def get_takeoff_config():
                         takeoff_data = config['takeoff']
                         if 'altitude' in takeoff_data:
                             default_takeoff['takeoff_altitude'] = takeoff_data['altitude']
+                        if 'slowdown_zone' in takeoff_data:
+                            default_takeoff['slowdown_zone'] = takeoff_data['slowdown_zone']
                         if 'max_throttle_override' in takeoff_data:
                             default_takeoff['max_throttle_override'] = takeoff_data['max_throttle_override']
                             default_takeoff['takeoff_throttle'] = 1500 + takeoff_data['max_throttle_override']

@@ -304,7 +304,7 @@ class VtolBaseNode(Node):
         # 3. Climb
         # Slow-down zone: throttle dikurangi proporsional saat mendekati target altitude
         # untuk mencegah LOITER altitude controller overshoot/osilasi fighting dengan RC override.
-        SLOWDOWN_ZONE = 0.1   # meter sebelum target mulai kurangi throttle
+        SLOWDOWN_ZONE = config.get('slowdown_zone', 0.2)   # meter sebelum target mulai kurangi throttle
         THROTTLE_MIN  = 1515  # throttle minimal saat di dalam slow-down zone (cukup untuk loft halus)
         throttle_range = throttle - THROTTLE_MIN  # rentang throttle dari min ke full climb
 

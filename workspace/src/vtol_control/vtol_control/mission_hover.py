@@ -11,8 +11,8 @@ class MissionHoverNode(VtolBaseNode):
     def run_mission(self):
         # 1. Takeoff using configured altitude and throttle
         if self.takeoff():
-            # 2. Hover for exactly 5.0 seconds
-            if self.hover(duration_seconds=5.0):
+            # 2. Hover for exactly 10.0 seconds
+            if self.hover(duration_seconds=10.0):
                 # 3. Land gracefully and release overrides
                 self.land()
 
