@@ -151,8 +151,8 @@ class MissionCenteringNode(VtolBaseNode):
 
         # Inisialisasi PID dengan low-pass filter pada D-term (alpha=0.4 untuk keseimbangan smoothing & delay)
         # max_out dikurangi deadzone_bias agar output final tidak melebihi max_override
-        deadzone_bias = 25.0
-        pid_max_raw = self.max_override - deadzone_bias
+        deadzone_bias = float(self.pid_params.get('deadzone_bias', 35.0))
+        pid_max_raw = max(5.0, self.max_override - deadzone_bias)
         self.pid_roll = PIDController(
             self.pid_params['kp_roll'], self.pid_params['ki_roll'],
             self.pid_params['kd_roll'], pid_max_raw, d_filter_alpha=0.4
