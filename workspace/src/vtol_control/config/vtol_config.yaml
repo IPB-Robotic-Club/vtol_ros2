@@ -37,12 +37,12 @@ mavlink_forward:
 
 # Parameter PID untuk Centering ArUco (Menyerupai commit 51fe8a59)
 pid_centering:
-  kp_roll: 50.0         # Proportional gain untuk Roll (mengoreksi deviasi X)
+  kp_roll: 30.0         # Proportional gain untuk Roll (mengoreksi deviasi X)
   ki_roll: 0.2          # Integral gain untuk Roll
-  kd_roll: 12.0         # Derivative gain untuk Roll (untuk redam overshoot & jitter)
-  kp_pitch: 50.0        # Proportional gain untuk Pitch (mengoreksi deviasi Y)
+  kd_roll: 5.0          # Derivative gain untuk Roll (untuk redam overshoot & jitter)
+  kp_pitch: 30.0        # Proportional gain untuk Pitch (mengoreksi deviasi Y)
   ki_pitch: 0.2         # Integral gain untuk Pitch
-  kd_pitch: 12.0        # Derivative gain untuk Pitch (untuk redam overshoot & jitter)
+  kd_pitch: 5.0         # Derivative gain untuk Pitch (untuk redam overshoot & jitter)
   enable_yaw_alignment: false # Set true untuk aktifkan koreksi Yaw, false = fokus Roll/Pitch saja
   kp_yaw: 5.0           # Proportional gain untuk Yaw
   ki_yaw: 0.2           # Integral gain untuk Yaw
@@ -56,6 +56,8 @@ pid_centering:
   marker_lost_timeout: 5.0 # Waktu maksimal marker hilang (detik) sebelum failsafe LAND dipicu
   deadzone_bias: 35.0   # Minimum RC kick offset untuk Roll/Pitch (menembus deadzone ArduPilot ~20 PWM)
   deadzone_bias_yaw: 25.0 # Minimum RC kick offset untuk Yaw
+  # Sequential axis mode: koreksi Pitch (Y) dulu hingga stabil, lalu Roll (X), lalu kedua axis sekaligus
+  sequential_axis_mode: true  # true = PITCH_ONLY → ROLL_ONLY → CENTERING | false = langsung CENTERING (keduanya)
   # Active altitude hold selama centering (P-controller pada RC3/throttle)
   # Menggantikan RC3=1500 hardcoded agar drone tidak drift turun karena LOITER bias di SITL
   hold_altitude: true           # true = aktifkan altitude hold aktif, false = pasif (RC3=1500)

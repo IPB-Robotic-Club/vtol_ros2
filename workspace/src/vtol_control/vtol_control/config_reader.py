@@ -104,6 +104,8 @@ def get_pid_config():
         'centering_duration': 3.0,
         'marker_lost_timeout': 1.0,
         'deadzone_bias': 25.0,
+        'deadzone_bias_yaw': 25.0,
+        'sequential_axis_mode': False,
         # Active altitude hold parameters
         'hold_altitude': True,
         'kp_altitude': 30.0,

@@ -218,9 +218,18 @@ class MissionCenteringNode(VtolBaseNode):
         self.stable_start_time = None
         self.centered = False
         self.centering_active = False
-        # Phase control: 'YAW_ALIGN' dulu jika enable_yaw_alignment=True,
-        # sebaliknya langsung ke 'CENTERING' (Roll/Pitch saja)
-        self.phase = 'YAW_ALIGN' if self.enable_yaw_alignment else 'CENTERING'
+        # Phase control:
+        #   'YAW_ALIGN'  — koreksi Yaw dulu jika enable_yaw_alignment=True
+        #   'PITCH_ONLY' — koreksi Pitch (sumbu Y) saja hingga stabil  (sequential_axis_mode)
+        #   'ROLL_ONLY'  — koreksi Roll (sumbu X) saja hingga stabil   (sequential_axis_mode)
+        #   'CENTERING'  — koreksi Roll+Pitch bersamaan (fine-tune / mode langsung)
+        self.sequential_axis_mode = self.pid_params.get('sequential_axis_mode', False)
+        if self.enable_yaw_alignment:
+            self.phase = 'YAW_ALIGN'
+        elif self.sequential_axis_mode:
+            self.phase = 'PITCH_ONLY'
+        else:
+            self.phase = 'CENTERING'
         self.yaw_aligned = not self.enable_yaw_alignment
 
         # Berlangganan topik deteksi dari vtol_vision
@@ -415,7 +424,10 @@ class MissionCenteringNode(VtolBaseNode):
                     self.pid_yaw.reset()
                     self.pid_roll.reset()
                     self.pid_pitch.reset()
-                    self.phase = 'CENTERING'
+                    # Setelah YAW aligned: masuk PITCH_ONLY dulu jika sequential, else CENTERING
+                    next_phase = 'PITCH_ONLY' if self.sequential_axis_mode else 'CENTERING'
+                    self.phase = next_phase
+                    self.write_log(f"[YAW] Aligned! Mulai fase {next_phase}.")
                 # Netral sambil transisi
                 self.rc_channels[0] = 1500
                 self.rc_channels[1] = 1500
@@ -484,12 +496,153 @@ class MissionCenteringNode(VtolBaseNode):
             self.rc_channels[3] = 1500
             return
 
+        # ── FASE 2: PITCH_ONLY ──────────────────────────────────────────────
+        # Koreksi Pitch (sumbu Y) saja. Roll netral.
+        # Setelah |norm_error_y| <= error_threshold stabil centering_duration → ROLL_ONLY.
+        if self.phase == 'PITCH_ONLY':
+            is_fresh          = (current_time - self.last_detection_time) <= 0.3
+            is_pitch_centered = abs(self.norm_error_y) <= self.error_threshold
+
+            u_pitch_raw = 0.0
+            u_pitch     = 0.0
+
+            if is_fresh and is_pitch_centered:
+                self.rc_channels[0] = 1500
+                self.rc_channels[1] = 1500
+                self.rc_channels[2] = rc3_alt_hold
+                self.rc_channels[3] = 1500
+                self.pid_pitch.reset()
+                if self.stable_start_time is None:
+                    self.stable_start_time = current_time
+                    self.write_log(
+                        f"[PITCH_ONLY] Pitch centered! ey={self.norm_error_y:.3f} <= {self.error_threshold}. "
+                        f"Menunggu stabil {self.centering_duration}s..."
+                    )
+                elif current_time - self.stable_start_time >= self.centering_duration:
+                    self.write_log(
+                        f"[PITCH_ONLY] Pitch stabil {self.centering_duration}s! Lanjut ke ROLL_ONLY."
+                    )
+                    self.phase = 'ROLL_ONLY'
+                    self.stable_start_time = None
+                    self.pid_roll.reset()
+                    self.pid_pitch.reset()
+            else:
+                if self.stable_start_time is not None:
+                    self.write_log(f"[PITCH_ONLY] Pitch keluar toleransi (ey={self.norm_error_y:.3f}). Reset timer.")
+                    self.stable_start_time = None
+                u_pitch_raw = self.pid_pitch.update(self.norm_error_y, current_time)
+                deadzone_bias = self.pid_params.get('deadzone_bias', 35.0)
+                u_pitch = apply_smooth_deadzone(u_pitch_raw, deadzone_bias, band=0.5)
+                u_pitch = max(min(u_pitch, self.max_override), -self.max_override)
+                self.rc_channels[0] = 1500
+                self.rc_channels[1] = int(1500 + u_pitch)
+                self.rc_channels[2] = rc3_alt_hold
+                self.rc_channels[3] = 1500
+
+            self.get_logger().info(
+                f"[PITCH_ONLY] ey={self.norm_error_y:+.3f} raw={u_pitch_raw:+.2f} RC2={self.rc_channels[1]} "
+                f"| stable={('%.1f' % (current_time - self.stable_start_time)) if self.stable_start_time else '-'}s",
+                throttle_duration_sec=0.3
+            )
+            if self.csv_file:
+                try:
+                    alt = self.get_current_altitude()
+                    stable_dur = (current_time - self.stable_start_time) if self.stable_start_time else 0.0
+                    self.csv_file.write(
+                        f"PID,{current_time:.4f},{self.loop_iter},{self.last_vision_timestamp:.4f},"
+                        f"{self.last_vision_frame_no},{int(self.last_vision_frame_w)},{int(self.last_vision_frame_h)},"
+                        f"{self.last_raw_center_x:.2f},{self.last_raw_center_y:.2f},"
+                        f"{self.norm_error_x:.5f},{self.norm_error_y:.5f},"
+                        f"{distance_error:.4f},{alt:.3f},{self.yaw_error:.5f},PITCH_ONLY,"
+                        f"{self.pid_pitch.last_dt:.4f},"
+                        f",,,,,{self.rc_channels[0]},"
+                        f"{self.pid_pitch.p_term:.4f},{self.pid_pitch.i_term:.4f},{self.pid_pitch.d_term:.4f},"
+                        f"{u_pitch_raw:.4f},{u_pitch:.4f},{self.rc_channels[1]},"
+                        f",,,,,{self.rc_channels[3]},"
+                        f"{self.rc_channels[2]},{stable_dur:.3f}\n"
+                    )
+                    self.csv_file.flush()
+                except Exception:
+                    pass
+            return  # Jangan lanjut ke ROLL_ONLY / CENTERING
+
+        # ── FASE 3: ROLL_ONLY ──────────────────────────────────────────────
+        # Koreksi Roll (sumbu X) saja. Pitch netral.
+        # Setelah |norm_error_x| <= error_threshold stabil centering_duration → CENTERING.
+        if self.phase == 'ROLL_ONLY':
+            is_fresh         = (current_time - self.last_detection_time) <= 0.3
+            is_roll_centered = abs(self.norm_error_x) <= self.error_threshold
+
+            u_roll_raw = 0.0
+            u_roll     = 0.0
+
+            if is_fresh and is_roll_centered:
+                self.rc_channels[0] = 1500
+                self.rc_channels[1] = 1500
+                self.rc_channels[2] = rc3_alt_hold
+                self.rc_channels[3] = 1500
+                self.pid_roll.reset()
+                if self.stable_start_time is None:
+                    self.stable_start_time = current_time
+                    self.write_log(
+                        f"[ROLL_ONLY] Roll centered! ex={self.norm_error_x:.3f} <= {self.error_threshold}. "
+                        f"Menunggu stabil {self.centering_duration}s..."
+                    )
+                elif current_time - self.stable_start_time >= self.centering_duration:
+                    self.write_log(
+                        f"[ROLL_ONLY] Roll stabil {self.centering_duration}s! Lanjut ke CENTERING (fine-tune)."
+                    )
+                    self.phase = 'CENTERING'
+                    self.stable_start_time = None
+                    self.pid_roll.reset()
+                    self.pid_pitch.reset()
+            else:
+                if self.stable_start_time is not None:
+                    self.write_log(f"[ROLL_ONLY] Roll keluar toleransi (ex={self.norm_error_x:.3f}). Reset timer.")
+                    self.stable_start_time = None
+                u_roll_raw = self.pid_roll.update(self.norm_error_x, current_time)
+                deadzone_bias = self.pid_params.get('deadzone_bias', 35.0)
+                u_roll = apply_smooth_deadzone(u_roll_raw, deadzone_bias, band=0.5)
+                u_roll = max(min(u_roll, self.max_override), -self.max_override)
+                self.rc_channels[0] = int(1500 + u_roll)
+                self.rc_channels[1] = 1500
+                self.rc_channels[2] = rc3_alt_hold
+                self.rc_channels[3] = 1500
+
+            self.get_logger().info(
+                f"[ROLL_ONLY] ex={self.norm_error_x:+.3f} raw={u_roll_raw:+.2f} RC1={self.rc_channels[0]} "
+                f"| stable={('%.1f' % (current_time - self.stable_start_time)) if self.stable_start_time else '-'}s",
+                throttle_duration_sec=0.3
+            )
+            if self.csv_file:
+                try:
+                    alt = self.get_current_altitude()
+                    stable_dur = (current_time - self.stable_start_time) if self.stable_start_time else 0.0
+                    self.csv_file.write(
+                        f"PID,{current_time:.4f},{self.loop_iter},{self.last_vision_timestamp:.4f},"
+                        f"{self.last_vision_frame_no},{int(self.last_vision_frame_w)},{int(self.last_vision_frame_h)},"
+                        f"{self.last_raw_center_x:.2f},{self.last_raw_center_y:.2f},"
+                        f"{self.norm_error_x:.5f},{self.norm_error_y:.5f},"
+                        f"{distance_error:.4f},{alt:.3f},{self.yaw_error:.5f},ROLL_ONLY,"
+                        f"{self.pid_roll.last_dt:.4f},"
+                        f"{self.pid_roll.p_term:.4f},{self.pid_roll.i_term:.4f},{self.pid_roll.d_term:.4f},"
+                        f"{u_roll_raw:.4f},{u_roll:.4f},{self.rc_channels[0]},"
+                        f",,,,,{self.rc_channels[1]},"
+                        f",,,,,{self.rc_channels[3]},"
+                        f"{self.rc_channels[2]},{stable_dur:.3f}\n"
+                    )
+                    self.csv_file.flush()
+                except Exception:
+                    pass
+            return  # Jangan lanjut ke CENTERING
+
+        # ── FASE 4: CENTERING (fine-tune kedua axis) ───────────────────────
         u_roll_raw  = 0.0
         u_roll      = 0.0
         u_pitch_raw = 0.0
         u_pitch     = 0.0
 
-        is_fresh = (current_time - self.last_detection_time) <= 0.3
+        is_fresh       = (current_time - self.last_detection_time) <= 0.3
         is_xy_centered = (distance_error <= self.error_threshold)
         # Catatan: is_yaw_aligned TIDAK digunakan sebagai syarat selesai di sini.
         # Yaw sudah di-align di fase YAW_ALIGN. Di CENTERING, yaw hanya dikoreksi
@@ -578,7 +731,7 @@ class MissionCenteringNode(VtolBaseNode):
                     f"{self.last_vision_frame_no},{int(self.last_vision_frame_w)},{int(self.last_vision_frame_h)},"
                     f"{self.last_raw_center_x:.2f},{self.last_raw_center_y:.2f},"
                     f"{self.norm_error_x:.5f},{self.norm_error_y:.5f},"
-                    f"{distance_error:.4f},{alt:.3f},{self.yaw_error:.5f},CENTERING,"
+                    f"{distance_error:.4f},{alt:.3f},{self.yaw_error:.5f},{self.phase},"
                     f"{pid_dt:.4f},"
                     f"{self.pid_roll.p_term:.4f},{self.pid_roll.i_term:.4f},{self.pid_roll.d_term:.4f},"
                     f"{u_roll_raw:.4f},{u_roll:.4f},{self.rc_channels[0]},"
