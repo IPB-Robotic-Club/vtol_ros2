@@ -22,7 +22,7 @@ class MissionSearchMarkerNode(VtolBaseNode):
         self.target_marker_id = sm_config.get('target_marker_id', 2)
         self.roll_override = sm_config.get('roll_override', 60)
         self.pulse_duration = sm_config.get('pulse_duration', 0.5)
-        self.pause_duration = sm_config.get('pause_duration', 1.0)
+        self.pause_duration = sm_config.get('pause_duration', 1.5)
         self.overshoot_pulse_duration = sm_config.get('overshoot_pulse_duration', 0.5)
         self.hover_duration_before = sm_config.get('hover_duration_before', 2.0)
         self.hover_duration_after = sm_config.get('hover_duration_after', 3.0)
@@ -33,7 +33,7 @@ class MissionSearchMarkerNode(VtolBaseNode):
         self.post_detection_roll_override = sm_config.get('post_detection_roll_override', -60)
         self.post_detection_pitch_override = sm_config.get('post_detection_pitch_override', 0)
         self.post_detection_pulse_duration = sm_config.get('post_detection_pulse_duration', 0.5)
-        self.post_detection_pause_duration = sm_config.get('post_detection_pause_duration', 1.0)
+        self.post_detection_pause_duration = sm_config.get('post_detection_pause_duration', 1.5)
 
         # State tracking deteksi marker
         self.marker_detected = False

@@ -109,6 +109,13 @@ search_marker:
   servo_initial_pwm: 1900       # PWM Servo di awal / terkunci (1900 PWM)
   servo_drop_pwm: 1100          # PWM Servo saat melepas beban / drop (1100 PWM)
   servo_drop_duration: 2.0      # Durasi waktu (detik) menahan servo drop sebelum landing
+  # Parameter Maneuver Pasca-Drop (Setelah Drop Payload & Sebelum Landing)
+  post_drop_pulses: 2           # Jumlah pulsa dorongan pasca-drop (2 kali ke kiri)
+  post_drop_direction: "left"   # Arah dorongan pasca-drop ("left" = roll ke kiri 1440 PWM)
+  post_drop_roll_override: -60  # Deviasi PWM roll pasca-drop (-60 = 1440 PWM ke kiri)
+  post_drop_pitch_override: 0   # Deviasi PWM pitch pasca-drop (0 = netral)
+  post_drop_pulse_duration: 0.5 # Durasi per pulsa dorongan pasca-drop (detik)
+  post_drop_pause_duration: 1.5 # Jeda antar pulsa pasca-drop (detik)
 
 
 

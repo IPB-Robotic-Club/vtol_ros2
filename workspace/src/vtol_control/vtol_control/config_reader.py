@@ -268,6 +268,12 @@ def get_search_marker_config():
         'servo_initial_pwm': 1900,
         'servo_drop_pwm': 1100,
         'servo_drop_duration': 2.0,
+        'post_drop_pulses': 2,
+        'post_drop_direction': 'left',
+        'post_drop_roll_override': -60,
+        'post_drop_pitch_override': 0,
+        'post_drop_pulse_duration': 0.5,
+        'post_drop_pause_duration': 1.5,
     }
 
     if os.path.exists(config_file_path):

@@ -22,26 +22,34 @@ class MissionSearchDropLandNode(VtolBaseNode):
         self.target_marker_id = sm_config.get('target_marker_id', 2)
         self.roll_override = sm_config.get('roll_override', 60)
         self.pulse_duration = sm_config.get('pulse_duration', 0.5)
-        self.pause_duration = sm_config.get('pause_duration', 1.0)
+        self.pause_duration = sm_config.get('pause_duration', 1.5)
         self.overshoot_pulse_duration = sm_config.get('overshoot_pulse_duration', 0.5)
         self.hover_duration_before = sm_config.get('hover_duration_before', 2.0)
         self.hover_duration_after = sm_config.get('hover_duration_after', 3.0)
         self.alt_correction_threshold = sm_config.get('alt_correction_threshold', 0.9)
         self.tilt_compensation_gain = sm_config.get('tilt_compensation_gain', 0.25)
 
-        # Parameter maneuver pasca-deteksi
+        # Parameter maneuver pasca-deteksi (sebelum drop)
         self.post_detection_pulses = sm_config.get('post_detection_pulses', 2)
         self.post_detection_direction = sm_config.get('post_detection_direction', 'left')
         self.post_detection_roll_override = sm_config.get('post_detection_roll_override', -60)
         self.post_detection_pitch_override = sm_config.get('post_detection_pitch_override', 0)
         self.post_detection_pulse_duration = sm_config.get('post_detection_pulse_duration', 0.5)
-        self.post_detection_pause_duration = sm_config.get('post_detection_pause_duration', 1.0)
+        self.post_detection_pause_duration = sm_config.get('post_detection_pause_duration', 1.5)
 
         # Parameter Servo Drop
         self.servo_channel = sm_config.get('servo_channel', 9)
         self.servo_initial_pwm = sm_config.get('servo_initial_pwm', 1900)
         self.servo_drop_pwm = sm_config.get('servo_drop_pwm', 1100)
         self.servo_drop_duration = sm_config.get('servo_drop_duration', 2.0)
+
+        # Parameter maneuver pasca-drop (setelah drop & sebelum landing)
+        self.post_drop_pulses = sm_config.get('post_drop_pulses', 2)
+        self.post_drop_direction = sm_config.get('post_drop_direction', 'left')
+        self.post_drop_roll_override = sm_config.get('post_drop_roll_override', -60)
+        self.post_drop_pitch_override = sm_config.get('post_drop_pitch_override', 0)
+        self.post_drop_pulse_duration = sm_config.get('post_drop_pulse_duration', 0.5)
+        self.post_drop_pause_duration = sm_config.get('post_drop_pause_duration', 1.5)
 
         # Inisialisasi posisi awal servo ke locked (misal: 1900 PWM)
         self.set_rc_channel(self.servo_channel, self.servo_initial_pwm)
@@ -319,6 +327,70 @@ class MissionSearchDropLandNode(VtolBaseNode):
         self.get_logger().info(f"[SERVO DROP] Payload selesai dilepas! (Ditahan {self.servo_drop_duration}s).")
         return True
 
+    def execute_post_drop_maneuver(self, target_altitude=None) -> bool:
+        """
+        Menjalankan dorongan maneuver pasca-drop payload (misalnya 2 kali dorongan ke kiri)
+        setelah servo drop selesai dan sebelum pendaratan dilakukan.
+        """
+        if self.post_drop_pulses <= 0:
+            return True
+
+        if target_altitude is None:
+            target_altitude = get_takeoff_config().get('takeoff_altitude', 1.2)
+
+        self.get_logger().info(
+            f"[POST-DROP] Mengeksekusi {self.post_drop_pulses} kali dorongan '{self.post_drop_direction}' "
+            f"(Roll PWM: {1500 + self.post_drop_roll_override}, Pitch PWM: {1500 + self.post_drop_pitch_override})..."
+        )
+
+        for step in range(1, self.post_drop_pulses + 1):
+            if not rclpy.ok():
+                return False
+
+            self.get_logger().info(
+                f"[POST-DROP Step {step}/{self.post_drop_pulses}] Dorong {self.post_drop_direction} selama {self.post_drop_pulse_duration}s..."
+            )
+
+            # Phase 1: Dorongan Pulsa Pasca-Drop (dengan Active Alt Hold & Servo Drop Position)
+            start_pulse = time.time()
+            while rclpy.ok() and (time.time() - start_pulse < self.post_drop_pulse_duration):
+                self.rc_channels[0] = 1500 + self.post_drop_roll_override
+                self.rc_channels[1] = 1500 + self.post_drop_pitch_override
+                rc3 = self.compute_altitude_hold_rc3(target_altitude, self.tilt_compensation_gain)
+                self.rc_channels[2] = rc3
+                self.rc_channels[3] = 1500
+                self.set_rc_channel(self.servo_channel, self.servo_drop_pwm)
+
+                if not self.rc_timer:
+                    self.publish_rc()
+
+                rclpy.spin_once(self, timeout_sec=0.05)
+
+            # Phase 2: Pause / Delay netral antar pulsa
+            self.rc_channels[0] = 1500
+            self.rc_channels[1] = 1500
+            self.rc_channels[3] = 1500
+
+            start_pause = time.time()
+            while rclpy.ok() and (time.time() - start_pause < self.post_drop_pause_duration):
+                rc3 = self.compute_altitude_hold_rc3(target_altitude, self.tilt_compensation_gain)
+                self.rc_channels[2] = rc3
+                self.set_rc_channel(self.servo_channel, self.servo_drop_pwm)
+
+                if not self.rc_timer:
+                    self.publish_rc()
+
+                rclpy.spin_once(self, timeout_sec=0.05)
+
+        self.get_logger().info("[POST-DROP] Dorongan pasca-drop selesai. Menetralkan kontrol Roll & Pitch.")
+        self.rc_channels[0] = 1500
+        self.rc_channels[1] = 1500
+        self.rc_channels[3] = 1500
+        if not self.rc_timer:
+            self.publish_rc()
+
+        return True
+
     def run_mission(self):
         """Menjalankan seluruh alur misi otonom."""
         # 0. Set servo ke posisi terkunci (1900 PWM) sebelum takeoff
@@ -339,7 +411,7 @@ class MissionSearchDropLandNode(VtolBaseNode):
             self.get_logger().error("Misi dibatalkan: Pencarian marker terinterupsi.")
             return
 
-        # 4. Dorongan pasca-deteksi (dorong ke kiri 2 kali)
+        # 4. Dorongan pasca-deteksi (dorong ke kiri 2 kali sebelum drop)
         if not self.execute_post_detection_maneuver():
             self.get_logger().error("Misi dibatalkan: Maneuver pasca-deteksi terinterupsi.")
             return
@@ -349,13 +421,18 @@ class MissionSearchDropLandNode(VtolBaseNode):
             self.get_logger().error("Misi dibatalkan: Drop payload gagal.")
             return
 
-        # 6. Hover pasca-drop untuk stabilisasi
+        # 6. Dorongan pasca-drop (dorong ke kiri 2 kali setelah drop)
+        if not self.execute_post_drop_maneuver():
+            self.get_logger().error("Misi dibatalkan: Maneuver pasca-drop terinterupsi.")
+            return
+
+        # 7. Hover pasca-drop & maneuver untuk stabilisasi akhir
         if not self.hover(duration_seconds=self.hover_duration_after):
             self.get_logger().error("Misi dibatalkan: Hover akhir gagal.")
             return
 
-        # 7. Pendaratan otonom dan cleanup
-        self.get_logger().info("Misi search, overshoot, maneuver, & drop servo selesai! Melakukan pendaratan...")
+        # 8. Pendaratan otonom dan cleanup
+        self.get_logger().info("Misi search, overshoot, maneuver, drop servo, & post-drop maneuver selesai! Melakukan pendaratan...")
         self.land()
 
 
