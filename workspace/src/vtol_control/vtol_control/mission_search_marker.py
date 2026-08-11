@@ -20,14 +20,20 @@ class MissionSearchMarkerNode(VtolBaseNode):
         # Membaca konfigurasi dari vtol_config.yaml
         sm_config = get_search_marker_config()
         self.target_marker_id = sm_config.get('target_marker_id', 2)
-        self.roll_override = sm_config.get('roll_override', 40)
-        self.pulse_duration = sm_config.get('pulse_duration', 0.4)
+        self.roll_override = sm_config.get('roll_override', 60)
+        self.pulse_duration = sm_config.get('pulse_duration', 0.5)
         self.pause_duration = sm_config.get('pause_duration', 1.0)
         self.overshoot_pulse_duration = sm_config.get('overshoot_pulse_duration', 0.5)
         self.hover_duration_before = sm_config.get('hover_duration_before', 2.0)
         self.hover_duration_after = sm_config.get('hover_duration_after', 3.0)
-        self.alt_correction_threshold = sm_config.get('alt_correction_threshold', 0.08)
+        self.alt_correction_threshold = sm_config.get('alt_correction_threshold', 0.9)
         self.tilt_compensation_gain = sm_config.get('tilt_compensation_gain', 0.25)
+        self.post_detection_pulses = sm_config.get('post_detection_pulses', 2)
+        self.post_detection_direction = sm_config.get('post_detection_direction', 'left')
+        self.post_detection_roll_override = sm_config.get('post_detection_roll_override', -60)
+        self.post_detection_pitch_override = sm_config.get('post_detection_pitch_override', 0)
+        self.post_detection_pulse_duration = sm_config.get('post_detection_pulse_duration', 0.5)
+        self.post_detection_pause_duration = sm_config.get('post_detection_pause_duration', 1.0)
 
         # State tracking deteksi marker
         self.marker_detected = False
@@ -44,9 +50,10 @@ class MissionSearchMarkerNode(VtolBaseNode):
 
         self.get_logger().info(
             f"[MissionSearchMarker] Node Siap! "
-            f"Target ID={self.target_marker_id}, Roll Override=+{self.roll_override} PWM (1540), "
+            f"Target ID={self.target_marker_id}, Roll Override=+{self.roll_override} PWM ({1500+self.roll_override}), "
             f"Pulse={self.pulse_duration}s, Pause={self.pause_duration}s, "
             f"Overshoot={self.overshoot_pulse_duration}s, "
+            f"PostDetPulses={self.post_detection_pulses}x ({self.post_detection_direction}), "
             f"AltThresh={self.alt_correction_threshold}m, TiltGain={self.tilt_compensation_gain}"
         )
 
@@ -75,7 +82,7 @@ class MissionSearchMarkerNode(VtolBaseNode):
         """
         if target_altitude is None:
             from vtol_control.config_reader import get_takeoff_config
-            target_altitude = get_takeoff_config().get('altitude', 1.5)
+            target_altitude = get_takeoff_config().get('takeoff_altitude', 1.2)
 
         self.get_logger().info(
             f"[SEARCH] Memulai siklus roll kanan bertahap hingga marker ID {self.target_marker_id} terdeteksi... "
@@ -212,6 +219,69 @@ class MissionSearchMarkerNode(VtolBaseNode):
 
         return False
 
+    def execute_post_detection_maneuver(self, target_altitude=None) -> bool:
+        """
+        Menjalankan dorongan maneuver pasca-deteksi ArUco 2 (misalnya 2 kali dorongan ke kiri)
+        setelah marker terdeteksi & overshoot selesai.
+        """
+        if self.post_detection_pulses <= 0:
+            return True
+
+        if target_altitude is None:
+            from vtol_control.config_reader import get_takeoff_config
+            target_altitude = get_takeoff_config().get('takeoff_altitude', 1.2)
+
+        self.get_logger().info(
+            f"[POST-DETECTION] Mengeksekusi {self.post_detection_pulses} kali dorongan '{self.post_detection_direction}' "
+            f"(Roll PWM: {1500 + self.post_detection_roll_override}, Pitch PWM: {1500 + self.post_detection_pitch_override})..."
+        )
+
+        for step in range(1, self.post_detection_pulses + 1):
+            if not rclpy.ok():
+                return False
+
+            self.get_logger().info(
+                f"[POST-DETECTION Step {step}/{self.post_detection_pulses}] Dorong {self.post_detection_direction} selama {self.post_detection_pulse_duration}s..."
+            )
+
+            # Phase 1: Dorongan Pulsa Pasca-Deteksi (dengan Active Alt Hold)
+            start_pulse = time.time()
+            while rclpy.ok() and (time.time() - start_pulse < self.post_detection_pulse_duration):
+                self.rc_channels[0] = 1500 + self.post_detection_roll_override
+                self.rc_channels[1] = 1500 + self.post_detection_pitch_override
+                rc3 = self.compute_altitude_hold_rc3(target_altitude, self.tilt_compensation_gain)
+                self.rc_channels[2] = rc3
+                self.rc_channels[3] = 1500
+
+                if not self.rc_timer:
+                    self.publish_rc()
+
+                rclpy.spin_once(self, timeout_sec=0.05)
+
+            # Phase 2: Pause / Delay netral antar pulsa
+            self.rc_channels[0] = 1500
+            self.rc_channels[1] = 1500
+            self.rc_channels[3] = 1500
+
+            start_pause = time.time()
+            while rclpy.ok() and (time.time() - start_pause < self.post_detection_pause_duration):
+                rc3 = self.compute_altitude_hold_rc3(target_altitude, self.tilt_compensation_gain)
+                self.rc_channels[2] = rc3
+
+                if not self.rc_timer:
+                    self.publish_rc()
+
+                rclpy.spin_once(self, timeout_sec=0.05)
+
+        self.get_logger().info("[POST-DETECTION] Dorongan pasca-deteksi selesai. Menetralkan kontrol Roll & Pitch.")
+        self.rc_channels[0] = 1500
+        self.rc_channels[1] = 1500
+        self.rc_channels[3] = 1500
+        if not self.rc_timer:
+            self.publish_rc()
+
+        return True
+
     def run_mission(self):
         """Menjalankan seluruh alur misi otonom."""
         # 1. Takeoff otonom ke target altitude
@@ -229,13 +299,18 @@ class MissionSearchMarkerNode(VtolBaseNode):
             self.get_logger().error("Misi dibatalkan: Pencarian marker terinterupsi.")
             return
 
-        # 4. Hover pasca-overshoot untuk stabilisasi
+        # 4. Dorongan pasca-deteksi (dorong ke kiri 2 kali)
+        if not self.execute_post_detection_maneuver():
+            self.get_logger().error("Misi dibatalkan: Maneuver pasca-deteksi terinterupsi.")
+            return
+
+        # 5. Hover pasca-maneuver untuk stabilisasi
         if not self.hover(duration_seconds=self.hover_duration_after):
             self.get_logger().error("Misi dibatalkan: Hover akhir gagal.")
             return
 
-        # 5. Pendaratan otonom dan cleanup
-        self.get_logger().info("Misi pencarian & overshoot marker selesai! Melakukan pendaratan...")
+        # 6. Pendaratan otonom dan cleanup
+        self.get_logger().info("Misi pencarian, overshoot & maneuver pasca-deteksi selesai! Melakukan pendaratan...")
         self.land()
 
 

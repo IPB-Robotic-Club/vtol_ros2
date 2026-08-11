@@ -268,7 +268,7 @@ class VtolBaseNode(Node):
         from vtol_control.config_reader import get_takeoff_config
         config = get_takeoff_config()
         if target_altitude is None:
-            target_altitude = config.get('takeoff_altitude', 1.5)
+            target_altitude = config.get('takeoff_altitude', 1.2)
         if throttle is None:
             throttle = config.get('takeoff_throttle', 1500 + self.max_throttle_override)
 
@@ -378,7 +378,7 @@ class VtolBaseNode(Node):
 
         if target_altitude is None:
             from vtol_control.config_reader import get_takeoff_config
-            target_altitude = get_takeoff_config().get('altitude', 1.5)
+            target_altitude = get_takeoff_config().get('takeoff_altitude', 1.2)
 
         current_alt = self.get_current_altitude()
         alt_error = target_altitude - current_alt
@@ -399,7 +399,7 @@ class VtolBaseNode(Node):
         """Synchronously hovers for duration_seconds with active altitude hold."""
         if target_altitude is None:
             from vtol_control.config_reader import get_takeoff_config
-            target_altitude = get_takeoff_config().get('altitude', 1.5)
+            target_altitude = get_takeoff_config().get('takeoff_altitude', 1.2)
 
         self.get_logger().info(f"Entering Hover phase for {duration_seconds} seconds (target altitude: {target_altitude:.2f}m)...")
 

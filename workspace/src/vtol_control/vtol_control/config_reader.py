@@ -149,7 +149,8 @@ def get_takeoff_config():
     config_file_path = src_config_path if os.path.exists(src_config_path) else installed_config_path
 
     default_takeoff = {
-        'takeoff_altitude': 1.5,
+        'takeoff_altitude': 1.2,
+        'altitude': 1.2,
         'max_throttle_override': 30,
         'takeoff_throttle': 1530,
         'slowdown_zone': 0.2
@@ -170,6 +171,7 @@ def get_takeoff_config():
                         takeoff_data = config['takeoff']
                         if 'altitude' in takeoff_data:
                             default_takeoff['takeoff_altitude'] = takeoff_data['altitude']
+                            default_takeoff['altitude'] = takeoff_data['altitude']
                         if 'slowdown_zone' in takeoff_data:
                             default_takeoff['slowdown_zone'] = takeoff_data['slowdown_zone']
                         if 'max_throttle_override' in takeoff_data:
@@ -248,14 +250,20 @@ def get_search_marker_config():
 
     default_config = {
         'target_marker_id': 2,
-        'roll_override': 40,
-        'pulse_duration': 0.4,
+        'roll_override': 60,
+        'pulse_duration': 0.5,
         'pause_duration': 1.0,
         'overshoot_pulse_duration': 0.5,
         'hover_duration_before': 2.0,
         'hover_duration_after': 3.0,
-        'alt_correction_threshold': 0.08,
+        'alt_correction_threshold': 0.9,
         'tilt_compensation_gain': 0.25,
+        'post_detection_pulses': 2,
+        'post_detection_direction': 'left',
+        'post_detection_roll_override': -60,
+        'post_detection_pitch_override': 0,
+        'post_detection_pulse_duration': 0.5,
+        'post_detection_pause_duration': 1.0,
     }
 
     if os.path.exists(config_file_path):
