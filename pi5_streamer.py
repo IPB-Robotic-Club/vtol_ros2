@@ -17,7 +17,7 @@ print("Mulai streaming kamera Raspberry Pi 5 menggunakan Picamera2...")
 try:
     while True:
         frame = picam.capture_array()
-        ret, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 55])
+        ret, encoded = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
         if not ret:
             continue
             
