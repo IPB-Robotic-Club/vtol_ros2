@@ -82,7 +82,7 @@ pid_centering:
 
 # Parameter Lepas Landas Otonom (Takeoff)
 takeoff:
-  altitude: 1.2            # Ketinggian lepas landas otonom (meter) sebelum centering
+  altitude: 1            # Ketinggian lepas landas otonom (meter) sebelum centering
   max_throttle_override: 100 # Deviasi maksimal RC3 (Throttle) dari 1500 (1500 + 100 = 1600 PWM)
   throttle: 1600             # Nilai PWM Throttle saat Climb (1600 PWM)
   slowdown_zone: 0.2       # Zone pengurangan throttle sebelum target altitude (meter)
@@ -91,9 +91,9 @@ takeoff:
 search_marker:
   target_marker_id: 2          # ID ArUco marker yang dicari
   roll_override: 60             # Deviasi PWM roll kanan (1500 + 60 = 1560 PWM)
-  pulse_duration: 0.5           # Durasi dorongan roll per langkah (detik)
-  pause_duration: 1.5           # Jeda waktu antar dorongan roll (diperlama agar alt stabil di 1.2m)
-  overshoot_pulse_duration: 0.5 # Durasi dorongan roll ekstra (overshoot) setelah marker 2 terdeteksi (detik)
+  pulse_duration: 2           # Durasi dorongan roll per langkah (detik)
+  pause_duration: 1          # Jeda waktu antar dorongan roll (diperlama agar alt stabil di 1.2m)
+  overshoot_pulse_duration: 2.5 # Durasi dorongan roll ekstra (overshoot) setelah marker 2 terdeteksi (detik)
   hover_duration_before: 2.0    # Durasi hover stabilisasi setelah takeoff (detik)
   hover_duration_after: 3.0     # Durasi hover stabilisasi setelah overshoot (detik)
   alt_correction_threshold: 0.9 # Batas penurunan altitude (m) yang memicu koreksi aktif saat jeda
