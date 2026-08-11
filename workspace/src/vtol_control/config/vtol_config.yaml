@@ -92,7 +92,7 @@ search_marker:
   target_marker_id: 2          # ID ArUco marker yang dicari
   roll_override: 60             # Deviasi PWM roll kanan (1500 + 60 = 1560 PWM)
   pulse_duration: 0.5           # Durasi dorongan roll per langkah (detik)
-  pause_duration: 1.0           # Jeda waktu antar dorongan roll dengan roll netral 1500 (detik)
+  pause_duration: 1.5           # Jeda waktu antar dorongan roll (diperlama agar alt stabil di 1.2m)
   overshoot_pulse_duration: 0.5 # Durasi dorongan roll ekstra (overshoot) setelah marker 2 terdeteksi (detik)
   hover_duration_before: 2.0    # Durasi hover stabilisasi setelah takeoff (detik)
   hover_duration_after: 3.0     # Durasi hover stabilisasi setelah overshoot (detik)
@@ -103,7 +103,7 @@ search_marker:
   post_detection_roll_override: -60 # Deviasi PWM roll (-60 = 1440 PWM ke kiri)
   post_detection_pitch_override: 0  # Deviasi PWM pitch (0 = netral)
   post_detection_pulse_duration: 0.5 # Durasi per pulsa dorongan pasca-deteksi (detik)
-  post_detection_pause_duration: 1.0 # Jeda antar pulsa pasca-deteksi (detik)
+  post_detection_pause_duration: 1.5 # Jeda antar pulsa pasca-deteksi (diperlama agar alt stabil)
   # Parameter Servo Drop Pasca-Deteksi
   servo_channel: 9              # Channel RC untuk Servo Drop (default: CH9)
   servo_initial_pwm: 1900       # PWM Servo di awal / terkunci (1900 PWM)

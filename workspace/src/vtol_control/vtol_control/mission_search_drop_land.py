@@ -175,23 +175,6 @@ class MissionSearchDropLandNode(VtolBaseNode):
 
                 rclpy.spin_once(self, timeout_sec=0.05)
 
-            # Jika setelah pause ketinggian masih drop, perpanjang koreksi sejenak
-            recovery_start = time.time()
-            while rclpy.ok() and (target_altitude - self.get_current_altitude() > 0.03) and (time.time() - recovery_start < 1.0):
-                if self.marker_detected:
-                    break
-                current_alt = self.get_current_altitude()
-                rc3 = self.compute_altitude_hold_rc3(target_altitude, self.tilt_compensation_gain)
-                self.rc_channels[2] = rc3
-                self.set_rc_channel(self.servo_channel, self.servo_initial_pwm)
-                if not self.rc_timer:
-                    self.publish_rc()
-                self.get_logger().info(
-                    f"[ALT RECOVERY] Memulihkan ketinggian... {current_alt:.2f}m -> {target_altitude:.2f}m (RC3: {rc3})",
-                    throttle_duration_sec=0.3
-                )
-                rclpy.spin_once(self, timeout_sec=0.05)
-
         # Check jika keluar loop karena marker terdeteksi
         if self.marker_detected:
             self.get_logger().info(

@@ -39,7 +39,13 @@ class VtolBaseNode(Node):
         pid_config = get_pid_config()
         self.alt_hold_enabled = pid_config.get('hold_altitude', True)
         self.kp_altitude = pid_config.get('kp_altitude', 80.0)
-        self.hover_base = pid_config.get('hover_base', 1576)
+        # hover_base: 'tcp' (SITL) default = 1576 (karena bias SITL), 'serial' (real drone) default = 1500 (THR_MID fisik)
+        if self._active_profile == 'serial':
+            self.hover_base = pid_config.get('hover_base_serial', 1500)
+            self.get_logger().info("[AltHold] Profil 'serial' (Real Drone) aktif -> hover_base diset ke 1500 PWM (THR_MID netral).")
+        else:
+            self.hover_base = pid_config.get('hover_base', 1576)
+            self.get_logger().info("[AltHold] Profil 'tcp' (SITL) aktif -> hover_base diset ke 1576 PWM (SITL bias).")
         self.max_alt_correction = pid_config.get('max_throttle_correction', 150)
 
         # Telemetry State Variables
