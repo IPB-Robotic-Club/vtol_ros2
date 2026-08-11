@@ -365,12 +365,12 @@ class VtolBaseNode(Node):
 
         return False
 
-    def compute_altitude_hold_rc3(self, target_altitude=None) -> int:
+    def compute_altitude_hold_rc3(self, target_altitude=None, tilt_compensation_gain=0.25) -> int:
         """
-        Hitung nilai RC3 (throttle) untuk active altitude hold menggunakan P-controller.
-        Tujuan: mempertahankan target_altitude selama fase hover/centering.
+        Hitung nilai RC3 (throttle) untuk active altitude hold menggunakan P-controller
+        dengan Kompensasi Tilt Feedforward saat drone miring (roll/pitch).
 
-        Formula: RC3 = hover_base + kp_altitude × (target_alt − current_alt)
+        Formula: RC3 = hover_base + kp_altitude × (target_alt − current_alt) + tilt_boost
         Clamped by max_alt_correction.
         """
         if not self.alt_hold_enabled:
@@ -384,7 +384,16 @@ class VtolBaseNode(Node):
         alt_error = target_altitude - current_alt
         correction = self.kp_altitude * alt_error
         correction = max(min(correction, self.max_alt_correction), -self.max_alt_correction)
-        return int(self.hover_base + correction)
+
+        # Kompensasi miring (tilt feedforward): jika roll atau pitch diset melebihi neutral (1500)
+        roll_dev = abs(self.rc_channels[0] - 1500) if self.rc_channels[0] != 0 else 0
+        pitch_dev = abs(self.rc_channels[1] - 1500) if self.rc_channels[1] != 0 else 0
+        tilt_boost = 0
+        if roll_dev > 5 or pitch_dev > 5:
+            import math
+            tilt_boost = int(tilt_compensation_gain * math.sqrt(roll_dev**2 + pitch_dev**2))
+
+        return int(self.hover_base + correction + tilt_boost)
 
     def hover(self, duration_seconds, target_altitude=None):
         """Synchronously hovers for duration_seconds with active altitude hold."""

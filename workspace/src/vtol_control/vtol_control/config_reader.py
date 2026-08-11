@@ -253,7 +253,9 @@ def get_search_marker_config():
         'pause_duration': 1.0,
         'overshoot_pulse_duration': 0.5,
         'hover_duration_before': 2.0,
-        'hover_duration_after': 3.0
+        'hover_duration_after': 3.0,
+        'alt_correction_threshold': 0.08,
+        'tilt_compensation_gain': 0.25,
     }
 
     if os.path.exists(config_file_path):
