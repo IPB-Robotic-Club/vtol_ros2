@@ -264,6 +264,10 @@ def get_search_marker_config():
         'post_detection_pitch_override': 0,
         'post_detection_pulse_duration': 0.5,
         'post_detection_pause_duration': 1.0,
+        'servo_channel': 9,
+        'servo_initial_pwm': 1900,
+        'servo_drop_pwm': 1100,
+        'servo_drop_duration': 2.0,
     }
 
     if os.path.exists(config_file_path):

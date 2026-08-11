@@ -35,6 +35,8 @@ setup(
             'debug_aruco = vtol_control.mission_debug_aruco:main',
             'mission_servo = vtol_control.mission_servo:main',
             'mission_search_marker = vtol_control.mission_search_marker:main',
+            'mission_search_drop_land = vtol_control.mission_search_drop_land:main',
+            'mission_11 = vtol_control.mission_search_drop_land:main',
         ],
     },
 )
