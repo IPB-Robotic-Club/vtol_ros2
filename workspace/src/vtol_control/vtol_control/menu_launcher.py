@@ -17,14 +17,15 @@ def print_menu():
     print(" 9. Jalankan Uji Coba Servo CH9 (mission_servo)")
     print(" 10. Jalankan Misi Search & Overshoot Marker 2 (mission_search_marker)")
     print(" 11. Jalankan Misi Search, Overshoot, Servo Drop & Land (mission_search_drop_land)")
-    print(" 12. Keluar")
+    print(" 12. Jalankan Misi Manual Control Operator WASD/QE/F/L (mission_operator_control)")
+    print(" 13. Keluar")
     print("="*50)
 
 def main():
     while True:
         print_menu()
         try:
-            choice = input("Pilih opsi (1-12): ").strip()
+            choice = input("Pilih opsi (1-13): ").strip()
         except KeyboardInterrupt:
             print("\nExiting...")
             break
@@ -111,10 +112,17 @@ def main():
             except KeyboardInterrupt:
                 pass
         elif choice == '12':
+            print("\nMeluncurkan Misi Manual Control Operator (WASD/QE/F/L)...\n")
+            time.sleep(1.0)
+            try:
+                subprocess.run(["ros2", "run", "vtol_control", "mission_operator_control"])
+            except KeyboardInterrupt:
+                pass
+        elif choice == '13':
             print("\nKeluar dari menu launcher.")
             break
         else:
-            print("\nPilihan tidak valid. Silakan masukkan angka 1-12.")
+            print("\nPilihan tidak valid. Silakan masukkan angka 1-13.")
 
 if __name__ == '__main__':
     main()

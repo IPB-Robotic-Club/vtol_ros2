@@ -37,6 +37,8 @@ setup(
             'mission_search_marker = vtol_control.mission_search_marker:main',
             'mission_search_drop_land = vtol_control.mission_search_drop_land:main',
             'mission_11 = vtol_control.mission_search_drop_land:main',
+            'mission_operator_control = vtol_control.mission_operator_control:main',
+            'mission_12 = vtol_control.mission_operator_control:main',
         ],
     },
 )

@@ -290,3 +290,45 @@ def get_search_marker_config():
 
     return default_config
 
+
+def get_operator_control_config():
+    """
+    Membaca parameter untuk Misi 12: Operator Manual Control dari vtol_config.yaml.
+    """
+    package_name = 'vtol_control'
+    try:
+        package_share_dir = get_package_share_directory(package_name)
+    except Exception:
+        package_share_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    src_config_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', package_name, 'config', 'vtol_config.yaml'))
+    installed_config_path = os.path.join(package_share_dir, 'config', 'vtol_config.yaml')
+    config_file_path = src_config_path if os.path.exists(src_config_path) else installed_config_path
+
+    default_config = {
+        'pitch_override': 60,
+        'roll_override': 60,
+        'yaw_override': 50,
+        'pulse_duration': 0.5,
+        'pause_duration': 0.5,
+        'tilt_compensation_gain': 0.25,
+        'servo_channel': 9,
+        'servo_initial_pwm': 1900,
+        'servo_drop_pwm': 1100,
+        'servo_drop_duration': 2.0,
+    }
+
+    if os.path.exists(config_file_path):
+        try:
+            with open(config_file_path, 'r') as f:
+                config = yaml.safe_load(f)
+                if config and 'operator_control' in config:
+                    op_data = config['operator_control']
+                    for key in default_config:
+                        if key in op_data:
+                            default_config[key] = op_data[key]
+        except Exception as e:
+            print(f"Warning: Gagal membaca konfigurasi operator_control dari {config_file_path}: {e}")
+
+    return default_config
+
