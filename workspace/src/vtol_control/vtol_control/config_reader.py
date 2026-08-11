@@ -310,6 +310,7 @@ def get_operator_control_config():
         'roll_override': 60,
         'yaw_override': 50,
         'pulse_duration': 0.5,
+        'precise_power_reduction': 20,
         'pause_duration': 0.5,
         'tilt_compensation_gain': 0.25,
         'servo_channel': 9,

@@ -33,8 +33,12 @@ class MissionOperatorControlNode(VtolBaseNode):
         self.roll_override = op_config.get('roll_override', 60)
         self.yaw_override = op_config.get('yaw_override', 50)
         self.pulse_duration = op_config.get('pulse_duration', 0.5)
+        self.precise_power_reduction = op_config.get('precise_power_reduction', 20)
         self.pause_duration = op_config.get('pause_duration', 0.5)
         self.tilt_compensation_gain = op_config.get('tilt_compensation_gain', 0.25)
+
+        # State tracking mode precise
+        self.precise_mode = False
 
         # Parameter Servo Drop
         self.servo_channel = op_config.get('servo_channel', 9)
@@ -49,7 +53,8 @@ class MissionOperatorControlNode(VtolBaseNode):
         self.get_logger().info(
             f"[Mission12 - OperatorControl] Node Siap! "
             f"Pitch Override=±{self.pitch_override}, Roll Override=±{self.roll_override}, "
-            f"Yaw Override=±{self.yaw_override}, Pulse={self.pulse_duration}s, Pause={self.pause_duration}s, "
+            f"Yaw Override=±{self.yaw_override}, Precise Reduction=-{self.precise_power_reduction} PWM, "
+            f"Pulse={self.pulse_duration}s, Pause={self.pause_duration}s, "
             f"Servo CH{self.servo_channel} Init PWM={self.servo_initial_pwm}, Drop PWM={self.servo_drop_pwm}"
         )
 
@@ -158,6 +163,7 @@ class MissionOperatorControlNode(VtolBaseNode):
         print("  D / d : Roll Right     (Kanan)", flush=True)
         print("  Q / q : Yaw Left       (CCW / Putar Kiri)", flush=True)
         print("  E / e : Yaw Right      (CW / Putar Kanan)", flush=True)
+        print("  C / c : Toggle Precise Mode (Power -20 PWM)", flush=True)
         print("  F / f : Drop Payload   (Servo CH9 1900 -> 1100 PWM)", flush=True)
         print("  L / l : Land           (Pendaratan Otonom)", flush=True)
         print("  Ctrl+C: Abort Flight & Emergency Landing", flush=True)
@@ -199,24 +205,43 @@ class MissionOperatorControlNode(VtolBaseNode):
 
                 key_lower = key.lower()
 
+                # Hitung deviasi PWM efektif berdasarkan Precise Mode
+                p_ov = max(5, self.pitch_override - self.precise_power_reduction) if self.precise_mode else self.pitch_override
+                r_ov = max(5, self.roll_override - self.precise_power_reduction) if self.precise_mode else self.roll_override
+                y_ov = max(5, self.yaw_override - self.precise_power_reduction) if self.precise_mode else self.yaw_override
+                mode_str = " (PRECISE)" if self.precise_mode else ""
+
                 if key_lower == 'w':
                     # Pitch Forward (Pitch negative = Forward di ArduPilot)
-                    self.execute_rc_pulse("PITCH FORWARD (W)", pitch_delta=-self.pitch_override, target_altitude=target_altitude)
+                    self.execute_rc_pulse(f"PITCH FORWARD (W){mode_str}", pitch_delta=-p_ov, target_altitude=target_altitude)
                 elif key_lower == 's':
                     # Pitch Backward (Pitch positive = Backward)
-                    self.execute_rc_pulse("PITCH BACKWARD (S)", pitch_delta=self.pitch_override, target_altitude=target_altitude)
+                    self.execute_rc_pulse(f"PITCH BACKWARD (S){mode_str}", pitch_delta=p_ov, target_altitude=target_altitude)
                 elif key_lower == 'a':
                     # Roll Left (Roll negative = Left)
-                    self.execute_rc_pulse("ROLL LEFT (A)", roll_delta=-self.roll_override, target_altitude=target_altitude)
+                    self.execute_rc_pulse(f"ROLL LEFT (A){mode_str}", roll_delta=-r_ov, target_altitude=target_altitude)
                 elif key_lower == 'd':
                     # Roll Right (Roll positive = Right)
-                    self.execute_rc_pulse("ROLL RIGHT (D)", roll_delta=self.roll_override, target_altitude=target_altitude)
+                    self.execute_rc_pulse(f"ROLL RIGHT (D){mode_str}", roll_delta=r_ov, target_altitude=target_altitude)
                 elif key_lower == 'q':
                     # Yaw Left / CCW (Yaw negative = CCW)
-                    self.execute_rc_pulse("YAW LEFT CCW (Q)", yaw_delta=-self.yaw_override, target_altitude=target_altitude)
+                    self.execute_rc_pulse(f"YAW LEFT CCW (Q){mode_str}", yaw_delta=-y_ov, target_altitude=target_altitude)
                 elif key_lower == 'e':
                     # Yaw Right / CW (Yaw positive = CW)
-                    self.execute_rc_pulse("YAW RIGHT CW (E)", yaw_delta=self.yaw_override, target_altitude=target_altitude)
+                    self.execute_rc_pulse(f"YAW RIGHT CW (E){mode_str}", yaw_delta=y_ov, target_altitude=target_altitude)
+                elif key_lower == 'c':
+                    # Toggle Precise Mode
+                    self.precise_mode = not self.precise_mode
+                    if self.precise_mode:
+                        self.get_logger().info(
+                            f"[MODE TOGGLE] >>> PRECISE MODE AKTIF (Power -{self.precise_power_reduction} PWM) <<< | "
+                            f"Pitch: ±{p_ov}, Roll: ±{r_ov}, Yaw: ±{y_ov}"
+                        )
+                    else:
+                        self.get_logger().info(
+                            f"[MODE TOGGLE] >>> NORMAL MODE AKTIF <<< | "
+                            f"Pitch: ±{self.pitch_override}, Roll: ±{self.roll_override}, Yaw: ±{self.yaw_override}"
+                        )
                 elif key_lower == 'f':
                     # Drop Servo Payload
                     self.drop_payload(target_altitude=target_altitude)
@@ -225,7 +250,7 @@ class MissionOperatorControlNode(VtolBaseNode):
                     self.get_logger().info("[OPERATOR ACTION] Perintah LAND (L) diterima dari operator! Memulai pendaratan...")
                     break
                 else:
-                    self.get_logger().info(f"Tombol '{key}' tidak dikenal. Gunakan WASD, QE, F (drop), atau L (land).")
+                    self.get_logger().info(f"Tombol '{key}' tidak dikenal. Gunakan WASD, QE, C (toggle precise), F (drop), atau L (land).")
 
         finally:
             if old_settings:

@@ -122,7 +122,8 @@ operator_control:
   pitch_override: 60            # Deviasi PWM pitch (W = 1500 - 60 [Maju], S = 1500 + 60 [Mundur])
   roll_override: 60             # Deviasi PWM roll (A = 1500 - 60 [Kiri], D = 1500 + 60 [Kanan])
   yaw_override: 50              # Deviasi PWM yaw (Q = 1500 - 50 [CCW], E = 1500 + 50 [CW])
-  pulse_duration: 0.5           # Durasi pemberian RC override per input keyboard (detik)
+  pulse_duration: 1           # Durasi pemberian RC override per input keyboard (detik)
+  precise_power_reduction: 20   # Pengurangan deviasi PWM saat Precise Mode aktif (tombol C)
   pause_duration: 0.5           # Jeda stabilisasi antar input keyboard (detik)
   tilt_compensation_gain: 0.25  # Pengali feedforward thrust boost saat roll/pitch miring
   servo_channel: 9              # Channel RC untuk Servo Drop (default: CH9)
