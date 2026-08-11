@@ -34,6 +34,7 @@ setup(
             'mission_centering = vtol_control.mission_centering:main',
             'debug_aruco = vtol_control.mission_debug_aruco:main',
             'mission_servo = vtol_control.mission_servo:main',
+            'mission_search_marker = vtol_control.mission_search_marker:main',
         ],
     },
 )

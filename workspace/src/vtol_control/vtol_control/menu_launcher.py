@@ -15,14 +15,15 @@ def print_menu():
     print(" 7. Debug ArUco Dry-Run / Pre-Flight (debug_aruco)")
     print(" 8. Jalankan Vision Receiver Standalone (aruco_receiver)")
     print(" 9. Jalankan Uji Coba Servo CH9 (mission_servo)")
-    print(" 10. Keluar")
+    print(" 10. Jalankan Misi Search & Overshoot Marker 2 (mission_search_marker)")
+    print(" 11. Keluar")
     print("="*50)
 
 def main():
     while True:
         print_menu()
         try:
-            choice = input("Pilih opsi (1-10): ").strip()
+            choice = input("Pilih opsi (1-11): ").strip()
         except KeyboardInterrupt:
             print("\nExiting...")
             break
@@ -88,18 +89,24 @@ def main():
             except KeyboardInterrupt:
                 pass
         elif choice == '9':
-            print("\nMeluncurkan Uji Coba Servo CH9...")
-            print("Tekan Ctrl+C untuk kembali ke menu.\n")
+            print("\nMeluncurkan Uji Coba Servo CH9...\n")
             time.sleep(1.0)
             try:
                 subprocess.run(["ros2", "run", "vtol_control", "mission_servo"])
             except KeyboardInterrupt:
                 pass
         elif choice == '10':
+            print("\nMeluncurkan Misi Search & Overshoot Marker 2...\n")
+            time.sleep(1.0)
+            try:
+                subprocess.run(["ros2", "run", "vtol_control", "mission_search_marker"])
+            except KeyboardInterrupt:
+                pass
+        elif choice == '11':
             print("\nKeluar dari menu launcher.")
             break
         else:
-            print("\nPilihan tidak valid. Silakan masukkan angka 1-10.")
+            print("\nPilihan tidak valid. Silakan masukkan angka 1-11.")
 
 if __name__ == '__main__':
     main()

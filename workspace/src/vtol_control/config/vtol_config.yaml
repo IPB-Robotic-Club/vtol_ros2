@@ -87,3 +87,14 @@ takeoff:
   throttle: 1600             # Nilai PWM Throttle saat Climb (1600 PWM)
   slowdown_zone: 0.2       # Zone pengurangan throttle sebelum target altitude (meter)
 
+# Parameter Misi Search & Overshoot Marker (mission_search_marker)
+search_marker:
+  target_marker_id: 2          # ID ArUco marker yang dicari
+  roll_override: 40             # Deviasi PWM roll kanan (1500 + 40 = 1540 PWM)
+  pulse_duration: 0.4           # Durasi dorongan roll per langkah (detik)
+  pause_duration: 1.0           # Jeda waktu antar dorongan roll dengan roll netral 1500 (detik)
+  overshoot_pulse_duration: 0.5 # Durasi dorongan roll ekstra (overshoot) setelah marker 2 terdeteksi (detik)
+  hover_duration_before: 2.0    # Durasi hover stabilisasi setelah takeoff (detik)
+  hover_duration_after: 3.0     # Durasi hover stabilisasi setelah overshoot (detik)
+
+

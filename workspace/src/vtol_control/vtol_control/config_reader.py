@@ -230,3 +230,43 @@ def get_gcs_url():
     except Exception as e:
         print(f"Warning: Gagal membaca konfigurasi GCS forwarding dari {config_file_path}: {e}")
         return ''
+
+
+def get_search_marker_config():
+    """
+    Membaca parameter untuk misi search & overshoot marker dari vtol_config.yaml.
+    """
+    package_name = 'vtol_control'
+    try:
+        package_share_dir = get_package_share_directory(package_name)
+    except Exception:
+        package_share_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    src_config_path = os.path.abspath(os.path.join(package_share_dir, '..', '..', '..', '..', 'src', package_name, 'config', 'vtol_config.yaml'))
+    installed_config_path = os.path.join(package_share_dir, 'config', 'vtol_config.yaml')
+    config_file_path = src_config_path if os.path.exists(src_config_path) else installed_config_path
+
+    default_config = {
+        'target_marker_id': 2,
+        'roll_override': 40,
+        'pulse_duration': 0.4,
+        'pause_duration': 1.0,
+        'overshoot_pulse_duration': 0.5,
+        'hover_duration_before': 2.0,
+        'hover_duration_after': 3.0
+    }
+
+    if os.path.exists(config_file_path):
+        try:
+            with open(config_file_path, 'r') as f:
+                config = yaml.safe_load(f)
+                if config and 'search_marker' in config:
+                    sm_data = config['search_marker']
+                    for key in default_config:
+                        if key in sm_data:
+                            default_config[key] = sm_data[key]
+        except Exception as e:
+            print(f"Warning: Gagal membaca konfigurasi search_marker dari {config_file_path}: {e}")
+
+    return default_config
+
